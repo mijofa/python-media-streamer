@@ -70,6 +70,7 @@ def probe(fileuri: str):
 
 
 def generate_manifest(duration: float, segment_length: float = 10):
+    # FIXME: I'm using Flask, Flask has a templating engine, use that?
     segment_count = math.ceil(duration / segment_length)
     m3u = ["#EXTM3U",
            "#EXT-X-VERSION:3",
@@ -94,9 +95,13 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
     print(length)
     ffmpeg = subprocess.run(stdout=subprocess.PIPE, check=True, args=[
         'ffmpeg', '-loglevel', 'error',
-        '-ss', '{:0.6f}'.format(offset),
-        '-i', fileuri, '-t', '{:0.6f}'.format(length),
+        # Seek to the offset, and only play for the length
+        '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
+        '-i', fileuri,  # Everything after this only applies to the output
+        # Set the output's timestamp, otherwise the browser thinks it's already played this part
+        '-output_ts_offset', '{:0.6f}'.format(offset),
         '-acodec', 'mp3', '-vcodec', 'h264',  # FIXME: Copy the codec when it's already supported
+        # FIXME: Do I need to force a key frame? Should I even bother?
         '-f', 'mpegts', '-force_key_frames', '0', 'pipe:1'])
     assert ffmpeg.returncode == 0  # check=True should've already taken care of this.
     return ffmpeg.stdout
