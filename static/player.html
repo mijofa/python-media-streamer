@@ -1,20 +1,49 @@
 <!doctype html>
 <html>
-    <head><script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script></head>
+    <head>
+        <!-- FIXME: Host this locally? -->
+        <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+        <style type="text/css">
+            video {
+                /* Fill the window, use black-borders */
+                position: fixed;
+                width: 100%;
+                height: 100%;
+
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+
+                background: black;
+            }
+        </style>
+    </head>
     <body>
         <video id="video" controls autoplay />
+
+        <!-- Chrome/etc doesn't actually support HLS out of the box, so lets fix that.
+             This is just the Getting Started example from the hls.js documentation -->
         <script>
-            var video = document.getElementById("video");
-            if(Hls.isSupported()) {
-              var hls = new Hls({maxBufferLength: 500,
-                                 manifestLoadingTimeOut: 20000,
-                                 levelLoadingTimeOut: 20000,
-                                 fragLoadingTimeOut: 120000});
-              hls.loadSource("manifest.m3u8");
-              hls.attachMedia(video);
-              hls.on(Hls.Events.MANIFEST_PARSED,function() {
-                video.play();
-            });
+           var video = document.getElementById('video');
+           if(Hls.isSupported()) {
+               var hls = new Hls();
+               hls.loadSource(document.URL+'/manifest.m3u8');
+               hls.attachMedia(video);
+               hls.on(Hls.Events.MANIFEST_PARSED,function() {
+                   video.play();
+               });
+           }
+           // hls.js is not supported on platforms that do not have Media Source Extensions (MSE) enabled.
+           // When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element throught the `src` property.
+           // This is using the built-in support of the plain video element, without using hls.js.
+           // Note: it would be more normal to wait on the 'canplay' event below however on Safari (where you are most likely to find built-in HLS support) the video.src URL must be on the user-driven
+           // white-list before a 'canplay' event will be emitted; the last video event that can be reliably listened-for when the URL is not on the white-list is 'loadedmetadata'.
+           else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+               video.src = 'https://video-dev.github.io/streams/x36xhzz/x36xhzz.m3u8';
+               video.addEventListener('loadedmetadata',function() {
+                   video.play();
+               });
            }
         </script>
     </body>

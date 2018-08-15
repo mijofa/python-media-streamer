@@ -25,7 +25,7 @@ def index():
     return "Indexing isn't supported yet"
 
 
-@app.route('/watch/<path:filename>/player.html')
+@app.route('/watch/<path:filename>')
 def watch(filename):
     return flask.send_file(os.path.join('static','player.html'), mimetype='text/html')
 
