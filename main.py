@@ -1,14 +1,17 @@
 #!/usr/bin/python3
-import flask
+import sys
 import os.path
+
+import flask
 
 import ffmpeg
 
 app = flask.Flask("python-media-streamer")
 
+media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
 def get_mediauri(filename):
-    filepath = os.path.join(os.path.abspath(os.path.curdir), filename)
+    filepath = os.path.join(os.path.abspath(media_path), filename)
     assert os.path.exists(filepath) and not os.path.isdir(filepath)
     fileuri = 'file:' + filepath
     del filename
@@ -24,26 +27,7 @@ def index():
 
 @app.route('/watch/<path:filename>/player.html')
 def watch(filename):
-    return """<!doctype html><html>
-        <head><script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script></head>
-        <body>
-            <video id="video" controls autoplay />
-            <script>
-                var video = document.getElementById("video");
-                if(Hls.isSupported()) {
-                  var hls = new Hls({maxBufferLength: 500,
-                                     manifestLoadingTimeOut: 20000,
-                                     levelLoadingTimeOut: 20000,
-                                     fragLoadingTimeOut: 120000});
-                  hls.loadSource("manifest.m3u8");
-                  hls.attachMedia(video);
-                  hls.on(Hls.Events.MANIFEST_PARSED,function() {
-                    video.play();
-                });
-               }
-            </script>
-        </body>
-    </html>"""
+    return flask.send_file(os.path.join('static','player.html'), mimetype='text/html')
 
 
 @app.route('/watch/<path:filename>/manifest.m3u8')
