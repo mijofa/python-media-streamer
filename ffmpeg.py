@@ -3,6 +3,7 @@ import fcntl
 import json
 import math
 import os
+import signal
 import subprocess
 
 # Emby's ffmpeg invocation when watching a movie from Chrome Desktop on Debian:
@@ -99,7 +100,7 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
     # Not setting universal_newlines=True because I want the binary output here
     # Not using run() because I want to get the output before the command finishes,
     # annoyingly that means I don't get check=True and have to sort out my own returncode handling.
-    ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, args=[
+    ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, args=[
         'ffmpeg', '-loglevel', 'error', '-nostdin',
         # Seek to the offset, and only play for the length
         '-accurate_seek', '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
@@ -113,22 +114,48 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
     # FIXME: Is there a more pythonic way to do this?
     fcntl.fcntl(ffmpeg.stdout, fcntl.F_SETFL,
                 fcntl.fcntl(ffmpeg.stdout, fcntl.F_GETFL) | os.O_NONBLOCK)  # Get current flags, and add O_NONBLOCK
-    # ffmpeg.stdout never closes, that's weird.
-    while ffmpeg.poll() is None:
-        data = ffmpeg.stdout.read()
-        if data is None:
-            # There's no data ready to read
-            pass
-        elif data in (b'', ''):
-            # Command has ended, stdout should be closed
-            # FIXME: Is this an error I should raise? If not merge it with the is None above
-            pass
-        else:
-            yield data
-    excess_data = ffmpeg.stdout.read()
-    # FIXME: Excess data probably isn't a problem, just means data appeared in between the yield and the next loop,
-    #        but I haven't seen it in my testing, so defensive programming says "no"
-    assert excess_data in (b'', ''), "Excess data after ffmpeg ended"
-    # FIXME: Turn this into a real subprocess.CalledProcessError
-    #        I know there's subprocess.run().check_returncode() but I don't think there's similar for Popen()
-    assert ffmpeg.returncode == 0, "ffmpeg failed"
+    try:
+        # ffmpeg.stdout never closes, that's weird.
+        while ffmpeg.poll() is None:
+            data = ffmpeg.stdout.read()
+            if data is None:
+                # There's no data ready to read
+                pass
+            elif not data:
+                # Command has ended, I'd expect stdout to be closed here, but that's not how subprocess works apparently
+                # FIXME: Is is possible to get this when there's still more valid data to come?
+                break
+            else:
+                yield data
+    except GeneratorExit as e:
+        # ffmpeg doesn't die unless we read out all its data, or kill it.
+        # When the HTTP request stops, the generator stops being iterated over,
+        # so we've stopped reading the data and need to kill it instead.
+        #
+        # Why doesn't ffmpeg acknowledge a SIGTERM?
+        # Ok, it acknowledges SIGINT so we'll go with that.
+        ffmpeg.send_signal(signal.SIGINT)
+
+        # If that didn't work, SIGKILL it
+        try: ffmpeg.wait(timeout=4)                      # noqa: E701
+        except subprocess.TimeoutExpired: ffmpeg.kill()  # noqa: E701
+
+        # Leave a note that it was killed here so the finally block can ignore a bad exit status
+        ffmpeg.been_killed = True
+    finally:
+        # ffmpeg closes stdout before finishing its own cleanup & exit.
+        # Need to wait for it to exit in order to actually handle the return code properly.
+        # Although if it was intentionally killed earlier, we don't care that it's an unclean death
+        #
+        # If it's still not dead yet then there will be a TimeoutExpired exception, which we can handle separately.
+        if ffmpeg.wait(timeout=1) != 0 and not ffmpeg.__dict__.get('been_killed', False):
+            # I know there's subprocess.run().check_returncode() but Popen doesn't have similar, so I gotta do it myself.
+            #
+            # I'm only defining this variable instead of putting it all on the raise line so that the backtrace looks nicer
+            FfmpegError = subprocess.CalledProcessError(
+                returncode=ffmpeg.returncode,
+                cmd=ffmpeg.args,
+                # output=ffmpeg.stdout.read(),  # I've already captured the stdout, so this is useless.
+                stderr=ffmpeg.stderr.read(),
+            )
+            raise FfmpegError
