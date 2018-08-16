@@ -10,6 +10,7 @@ app = flask.Flask("python-media-streamer")
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
+
 def get_mediauri(filename):
     filepath = os.path.join(os.path.abspath(media_path), filename)
     assert os.path.exists(filepath) and not os.path.isdir(filepath)
@@ -27,7 +28,7 @@ def index():
 
 @app.route('/watch/<path:filename>')
 def watch(filename):
-    return flask.send_file(os.path.join('static','player.html'), mimetype='text/html')
+    return flask.send_file(os.path.join('static', 'player.html'), mimetype='text/html')
 
 
 @app.route('/watch/<path:filename>/manifest.m3u8')
@@ -56,4 +57,4 @@ def hls_segment(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', threaded=True)

@@ -93,7 +93,9 @@ def generate_manifest(duration: float, segment_length: float = 10):
 
 
 def get_segment(fileuri: str, offset: float, length: float, index: int):
-    ## FIXME: Turn this into a generator so that Flask can send the segment to the browser in smaller chunks
+    ## FIXME: URGENT! Now that this is a generator, ffmpeg doens't ever actually end if the http request gets cancelled.
+    ##        I'm guessing this is because Flask hasn't been taught how to kill ffmpeg,
+    ##        Flask is just cleaning up the generator and moving on.
     # Not setting universal_newlines=True because I want the binary output here
     # Not using run() because I want to get the output before the command finishes,
     # annoyingly that means I don't get check=True and have to sort out my own returncode handling.
