@@ -1,7 +1,9 @@
 #!/usr/bin/python3
+import fcntl
 import json
-import subprocess
 import math
+import os
+import subprocess
 
 # Emby's ffmpeg invocation when watching a movie from Chrome Desktop on Debian:
 #      /opt/emby-server/bin/ffmpeg -f matroska,webm -i file:/srv/media/Video/TV/Stitchers/S03E02.mkv -threads 0 -map 0:0 -map 0:1 -map -0:s -codec:v:0 libx264 -vf scale=trunc(min(max(iw\,ih*dar)\,1920)/2)*2:trunc(ow/dar/2)*2 -pix_fmt yuv420p -preset veryfast -crf 23 -maxrate 4148908 -bufsize 8297816 -profile:v high -level 4.1 -x264opts:0 subme=0:me_range=4:rc_lookahead=10:me=dia:no_chroma_me:8x8dct=0:partitions=none -force_key_frames expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3)) -copyts -vsync -1 -codec:a:0 copy -f segment -max_delay 5000000 -avoid_negative_ts disabled -map_metadata -1 -map_chapters -1 -start_at_zero -segment_time 3 -individual_header_trailer 0 -segment_format mpegts -segment_list_type m3u8 -segment_start_number 0 -segment_list /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b.m3u8 -y /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b%d.ts  # noqa: E501
@@ -93,7 +95,9 @@ def generate_manifest(duration: float, segment_length: float = 10):
 def get_segment(fileuri: str, offset: float, length: float, index: int):
     ## FIXME: Turn this into a generator so that Flask can send the segment to the browser in smaller chunks
     # Not setting universal_newlines=True because I want the binary output here
-    ffmpeg = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, check=True, args=[
+    # Not using run() because I want to get the output before the command finishes,
+    # annoyingly that means I don't get check=True and have to sort out my own returncode handling.
+    ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, args=[
         'ffmpeg', '-loglevel', 'error', '-nostdin',
         # Seek to the offset, and only play for the length
         '-accurate_seek', '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
@@ -103,5 +107,26 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
         '-acodec', 'mp3', '-vcodec', 'h264',  # FIXME: Copy the codec when it's already supported
         # FIXME: Do I need to force a key frame? Should I even bother?
         '-f', 'mpegts', '-force_key_frames', '0', 'pipe:1'])
-    assert ffmpeg.returncode == 0  # check=True should've already taken care of this.
-    return ffmpeg.stdout
+    # Set stdout to be non-blocking so that I don't have to read it all at once.
+    # FIXME: Is there a more pythonic way to do this?
+    fcntl.fcntl(ffmpeg.stdout, fcntl.F_SETFL,
+                fcntl.fcntl(ffmpeg.stdout, fcntl.F_GETFL) | os.O_NONBLOCK)  # Get current flags, and add O_NONBLOCK
+    # ffmpeg.stdout never closes, that's weird.
+    while ffmpeg.poll() is None:
+        data = ffmpeg.stdout.read()
+        if data is None:
+            # There's no data ready to read
+            pass
+        elif data in (b'', ''):
+            # Command has ended, stdout should be closed
+            # FIXME: Is this an error I should raise? If not merge it with the is None above
+            pass
+        else:
+            yield data
+    excess_data = ffmpeg.stdout.read()
+    # FIXME: Excess data probably isn't a problem, just means data appeared in between the yield and the next loop,
+    #        but I haven't seen it in my testing, so defensive programming says "no"
+    assert excess_data in (b'', ''), "Excess data after ffmpeg ended"
+    # FIXME: Turn this into a real subprocess.CalledProcessError
+    #        I know there's subprocess.run().check_returncode() but I don't think there's similar for Popen()
+    assert ffmpeg.returncode == 0, "ffmpeg failed"
