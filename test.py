@@ -2,6 +2,7 @@
 import os
 import sys
 import math
+
 import ffmpeg
 input_file = sys.argv[1]
 output_dir = sys.argv[2]
