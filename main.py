@@ -38,6 +38,11 @@ def manifest(filename):
     return flask.Response(ffmpeg.generate_manifest(duration), mimetype='application/x-mpegURL')
 
 
+@app.route('/raw_media/<path:filename>')
+def raw_media(filename):
+    return flask.send_from_directory(media_path, filename)
+
+
 @app.route('/watch/<path:filename>/hls-segment.ts')
 def hls_segment(filename):
     fileuri = get_mediauri(filename)
@@ -51,4 +56,4 @@ def hls_segment(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
