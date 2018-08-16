@@ -19,8 +19,8 @@ import math
 def probe(fileuri: str):
     """Probe for codec info and generic track metadata"""
     # FIXME: Add a reasonable timeout. What's reasonable?
-    ffprobe = subprocess.run(stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
-        'ffprobe', '-v', 'error',
+    ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
+        'ffprobe', '-loglevel', 'error', '-nostdin',
         '-show_entries', 'stream=index,codec_name,codec_type,channels:stream_tags:format=format_name,duration',
         '-print_format', 'json=compact=1',
         '-i', fileuri])
@@ -54,8 +54,8 @@ def probe(fileuri: str):
 
 # def find_keyframes(fileuri: str, video_stream_id: int = 0):
 #     """Find timestamps for all keyframes in the selected video stream"""
-#     ffprobe = subprocess.run(stdout=subprocess.PIPE,universal_newlines=True,check=True,args=[
-#         'ffprobe','-v','error',
+#     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,universal_newlines=True,check=True,args=[
+#         'ffprobe','-loglevel','error', '-nostdin',
 #         # We want to know where all the keyframes are, but we don't care about any of the other frame timestamps
 #         '-skip_frame','nokey',
 #         '-show_entries','frame=best_effort_timestamp_time',
@@ -91,12 +91,12 @@ def generate_manifest(duration: float, segment_length: float = 10):
 
 
 def get_segment(fileuri: str, offset: float, length: float, index: int):
+    ## FIXME: Turn this into a generator so that Flask can send the segment to the browser in smaller chunks
     # Not setting universal_newlines=True because I want the binary output here
-    print(length)
-    ffmpeg = subprocess.run(stdout=subprocess.PIPE, check=True, args=[
-        'ffmpeg', '-loglevel', 'error',
+    ffmpeg = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, check=True, args=[
+        'ffmpeg', '-loglevel', 'error', '-nostdin',
         # Seek to the offset, and only play for the length
-        '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
+        '-accurate_seek', '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
         '-i', fileuri,  # Everything after this only applies to the output
         # Set the output's timestamp, otherwise the browser thinks it's already played this part
         '-output_ts_offset', '{:0.6f}'.format(offset),
