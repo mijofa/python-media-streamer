@@ -84,7 +84,7 @@ def generate_manifest(duration: float, segment_length: float = 10):
            # "#EXT-X-START:"  # Probably wanna use this to set a save point
            "#EXT-X-TARGETDURATION:{}".format(segment_length),
            ] + ["#EXTINF:{segment_duration:0.6f},\n"
-                "hls-segment.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
+                "hls-segment#{index}.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
                     segment_duration=segment_length, index=segment_index,
                     offset=0 if segment_index == 0 else  # First segment
                     duration - (segment_length * (segment_index)) if segment_index == segment_count - 1 else  # Last segment  # noqa: E131,E501

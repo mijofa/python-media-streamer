@@ -54,9 +54,11 @@ def raw_media(filename):
     return flask.send_from_directory(media_path, filename)
 
 
-@app.route('/watch/<path:filename>/hls-segment.ts')
-def hls_segment(filename):
+@app.route('/watch/<path:filename>/hls-segment#<int:index>.ts')
+def hls_segment(filename, index):
     fileuri = get_mediauri(filename)
+
+    assert index == int(flask.request.args['index'])
 
     # FIXME: Assert that there's no more than one of each argument
     return flask.Response(ffmpeg.get_segment(fileuri=fileuri,
