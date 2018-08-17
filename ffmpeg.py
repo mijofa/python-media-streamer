@@ -23,7 +23,7 @@ def probe(fileuri: str):
     """Probe for codec info and generic track metadata"""
     # FIXME: Add a reasonable timeout. What's reasonable?
     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
-        'ffprobe', '-loglevel', 'error', '-nostdin',
+        'ffprobe', '-loglevel', 'error',
         '-show_entries', 'stream=index,codec_name,codec_type,channels:stream_tags:format=format_name,duration',
         '-print_format', 'json=compact=1',
         '-i', fileuri])
