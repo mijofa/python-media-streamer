@@ -39,6 +39,16 @@ def manifest(filename):
     return flask.Response(ffmpeg.generate_manifest(duration), mimetype='application/x-mpegURL')
 
 
+# Chromecast requires CORS headers for all media resources, I don't yet understand CORS headers.
+# This is just enough to make Chromecast work, haphazardly stolen from https://gist.github.com/blixt/54d0a8bf9f64ce2ec6b8
+#
+# FIXME: Make sense of CORS headers, and implement them properly.
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+app.after_request(add_cors_headers)  # noqa: E305
+
+
 @app.route('/raw_media/<path:filename>')
 def raw_media(filename):
     return flask.send_from_directory(media_path, filename)
