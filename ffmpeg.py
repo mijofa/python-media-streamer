@@ -2,6 +2,7 @@
 import fcntl
 import json
 import math
+import operator
 import os
 import signal
 import subprocess
@@ -25,7 +26,7 @@ def probe(fileuri: str):
     # FIXME: Add a reasonable timeout. What's reasonable?
     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
         'ffprobe', '-loglevel', 'error',
-        '-show_entries', 'stream=index,codec_name,codec_type,channels:stream_tags:format=format_name,duration',
+        '-show_entries', 'stream=index,codec_name,codec_type,channels,r_frame_rate:stream_tags:format=format_name,duration',
         '-print_format', 'json=compact=1',
         '-i', fileuri])
     assert ffprobe.returncode == 0  # check=True should've already taken care of this.
@@ -41,19 +42,22 @@ def probe(fileuri: str):
     # I should be able to avoid storing the index and keep the confusion here and only here.
     for stream in sorted(probed_info['streams'], key=lambda d: d.get('index')):
         if stream['codec_type'] == 'video':
+            fps = operator.truediv(*(int(i) for i in stream['r_frame_rate'].split('/')))
             # FIXME: Is there any identifiers worth adding here?
-            v_streams.append({'codec': stream['codec_name']})
+            v_streams.append({'codec': stream['codec_name'], 'fps': fps})
         elif stream['codec_type'] == 'audio':
-            # FIXME: Pretty sure I've seen some sort of labels on audio & subtitle streams.I
+            # FIXME: Pretty sure I've seen some sort of labels on audio & subtitle streams.
             #        Maybe that's just put together from the tags?
             a_streams.append({'codec': stream['codec_name'],
-                              # Need to specify channels because aac is supported by Chromecast, but not with more than 2 channels
+                              # Need to get channels because aac is supported by Chromecast, but not with more than 2 channels,
+                              # and I intend to (if possible) codec copy when the original is already supported.
                               'channels': stream['channels'],
                               # There might be no language tag, or there might be no tags at all
                               # FIXME: Should I just put the entire 'tags' section here?
                               'language': stream.get('tags', {}).get('language', '')})
         else:
             raise NotImplementedError("Streams of type {} are not supported".format(stream['codec_type']))
+    print(v_streams, a_streams)
     return {'container': container_info, 'video': v_streams, 'audio': a_streams}
 
 # def find_keyframes(fileuri: str, video_stream_id: int = 0):
@@ -82,9 +86,10 @@ def generate_manifest(duration: float, segment_length: float = 10):
            "#EXT-X-PLAYLIST-TYPE:VOD",
            "#EXT-X-ALLOW-CACHE:YES",
            # "#EXT-X-START:"  # Probably wanna use this to set a save point
-           "#EXT-X-TARGETDURATION:{}".format(segment_length),
+           # Target duration *MUST* be at least the length of the longest segment, safer to go slightly higher.
+           "#EXT-X-TARGETDURATION:{}".format(segment_length + 1),
            ] + ["#EXTINF:{segment_duration:0.6f},\n"
-                "hls-segment#{index}.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
+                "hls-segment.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
                     segment_duration=segment_length, index=segment_index,
                     offset=0 if segment_index == 0 else  # First segment
                     duration - (segment_length * (segment_index)) if segment_index == segment_count - 1 else  # Last segment  # noqa: E131,E501
@@ -95,16 +100,13 @@ def generate_manifest(duration: float, segment_length: float = 10):
 
 
 def get_segment(fileuri: str, offset: float, length: float, index: int):
-    ## FIXME: URGENT! Now that this is a generator, ffmpeg doens't ever actually end if the http request gets cancelled.
-    ##        I'm guessing this is because Flask hasn't been taught how to kill ffmpeg,
-    ##        Flask is just cleaning up the generator and moving on.
     # Not setting universal_newlines=True because I want the binary output here
     # Not using run() because I want to get the output before the command finishes,
     # annoyingly that means I don't get check=True and have to sort out my own returncode handling.
     ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, args=[
         'ffmpeg', '-loglevel', 'error', '-nostdin',
         # Seek to the offset, and only play for the length
-        '-accurate_seek', '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
+        '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
         '-i', fileuri,  # Everything after this only applies to the output
         # Set the output's timestamp, otherwise the browser thinks it's already played this part
         '-output_ts_offset', '{:0.6f}'.format(offset),
@@ -115,7 +117,8 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
         # perhaps the Chromecast isn't liking that both segments have the same filename regardless of the query strings.
         # FIXME: Try Chromecast again with the index included in the filename not just the query string.
         #        Requires updating generate_manifest() above and main.py:manifest()
-        '-acodec', 'aac', '-vcodec', 'h264',  # FIXME: Copy the codec when it's already supported
+        # Nope, not the filename. Not the audio stream either. Nor the bitrate
+        '-acodec', 'aac', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
         # FIXME: Do I need to force a key frame? Should I even bother?
         '-f', 'mpegts', '-force_key_frames', '0', 'pipe:1'])
     # Set stdout to be non-blocking so that I don't have to read it all at once.
@@ -132,10 +135,12 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
             elif not data:
                 # Command has ended, I'd expect stdout to be closed here, but that's not how subprocess works apparently
                 # FIXME: Is is possible to get this when there's still more valid data to come?
+                print("finished segment")
                 break
             else:
                 yield data
     except GeneratorExit as e:
+        print("Segment cancelled")
         # ffmpeg doesn't die unless we read out all its data, or kill it.
         # When the HTTP request stops, the generator stops being iterated over,
         # so we've stopped reading the data and need to kill it instead.
