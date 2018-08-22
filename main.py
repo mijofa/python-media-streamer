@@ -1,12 +1,16 @@
 #!/usr/bin/python3
 import sys
-import os.path
+import os
 
 import flask
 
 import ffmpeg
 
-app = flask.Flask("python-media-streamer")
+app = flask.Flask("web-emcee")
+
+# NOTE: This temporary directory is not secure because it's predictable,
+#       but I'm only intending to use it for transcoding cache, so that's ok.
+TMP_DIR = os.path.join(os.environ.get('XDG_RUNTIME_DIR', os.environ.get('TMPDIR', '/tmp/')), app.name)
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
@@ -31,12 +35,25 @@ def watch(filename):
     return flask.send_file(os.path.join('static', 'player.html'), mimetype='text/html')
 
 
-@app.route('/watch/<path:filename>/manifest.m3u8')
+@app.route('/watch/<path:filename>/hls-manifest.m3u8')
 def manifest(filename):
     fileuri = get_mediauri(filename)
+    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
-    duration = ffmpeg.probe(fileuri)['container']['duration']
-    return flask.Response(ffmpeg.generate_manifest(duration), mimetype='application/x-mpegURL')
+    return ffmpeg.get_manifest(output_dir, fileuri)
+
+
+@app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
+def hls_segment(filename, index):
+    fileuri = get_mediauri(filename)
+    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
+
+    return ffmpeg.get_segment(output_dir, index)
+
+
+@app.route('/raw_media/<path:filename>')
+def raw_media(filename):
+    return flask.send_from_directory(media_path, filename)
 
 
 # Chromecast requires CORS headers for all media resources, I don't yet understand CORS headers.
@@ -47,23 +64,6 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 app.after_request(add_cors_headers)  # noqa: E305
-
-
-@app.route('/raw_media/<path:filename>')
-def raw_media(filename):
-    return flask.send_from_directory(media_path, filename)
-
-
-@app.route('/watch/<path:filename>/hls-segment.ts')
-def hls_segment(filename):
-    fileuri = get_mediauri(filename)
-
-    # FIXME: Assert that there's no more than one of each argument
-    return flask.Response(ffmpeg.get_segment(fileuri=fileuri,
-                                             index=int(flask.request.args['index']),
-                                             offset=float(flask.request.args['offset']),
-                                             length=float(flask.request.args['length'])),
-                          mimetype='video/mp2t')
 
 
 # Chromecast refuses to use the DNS server specified by DHCP without messing with the firewall rules to block Google's DNS.
@@ -81,4 +81,6 @@ def get_ip():
 
 
 if __name__ == "__main__":
+    if not os.path.isdir(TMP_DIR):
+        os.mkdir(TMP_DIR)
     app.run(debug=True, host='0.0.0.0', threaded=True)

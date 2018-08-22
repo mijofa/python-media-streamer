@@ -29,7 +29,7 @@
            var video = document.getElementById('video');
            if(Hls.isSupported()) {
                var hls = new Hls();
-               hls.loadSource(document.URL+'/manifest.m3u8');
+               hls.loadSource(document.URL+'/hls-manifest.m3u8');
                hls.attachMedia(video);
                hls.on(Hls.Events.MANIFEST_PARSED,function() {
                    video.play();
@@ -41,7 +41,7 @@
            // Note: it would be more normal to wait on the 'canplay' event below however on Safari (where you are most likely to find built-in HLS support) the video.src URL must be on the user-driven
            // white-list before a 'canplay' event will be emitted; the last video event that can be reliably listened-for when the URL is not on the white-list is 'loadedmetadata'.
            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-               video.src = document.URL+'/manifest.m3u8';
+               video.src = document.URL+'/hls-manifest.m3u8';
                video.addEventListener('loadedmetadata',function() {
                    video.play();
                });
@@ -93,7 +93,7 @@ function onRequestSessionSuccess(e) {
 function init_cast() {
     chrome.cast.requestSession(onRequestSessionSuccess, onError);
 }
-currentMediaURL = document.URL+'/manifest.m3u8';
+currentMediaURL = document.URL+'/hls-manifest.m3u8';
 function set_media() {
 	var mediaInfo = new chrome.cast.media.MediaInfo(currentMediaURL, 'application/x-mpegURL');
 	var request = new chrome.cast.media.LoadRequest(mediaInfo);
