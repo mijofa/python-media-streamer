@@ -82,18 +82,15 @@ def generate_manifest(duration: float, segment_length: float = 10):
     segment_count = math.ceil(duration / segment_length)
     m3u = ["#EXTM3U",
            "#EXT-X-VERSION:3",
-           "#EXT-X-DISCONTINUITY-SEQUENCE:0",
            "#EXT-X-MEDIA-SEQUENCE:0",
            "#EXT-X-PLAYLIST-TYPE:VOD",
            "#EXT-X-ALLOW-CACHE:YES",
            # "#EXT-X-START:"  # Probably wanna use this to set a save point
            # Target duration *MUST* be at least the length of the longest segment, safer to go slightly higher.
            "#EXT-X-TARGETDURATION:{}".format(segment_length + 1),
-           ] + ["{discontinuity}"
-                "#EXTINF:{segment_duration:0.6f},\n"
+           ] + ["#EXTINF:{segment_duration:0.6f},\n"
                 "hls-segment.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
                     segment_duration=segment_length, index=segment_index,
-                    discontinuity="#EXT-X-DISCONTINUITY\n" if segment_index != 0 else "",
                     offset=0 if segment_index == 0 else  # First segment
                     duration - (segment_length * (segment_index)) if segment_index == segment_count - 1 else  # Last segment  # noqa: E131,E501
                            segment_length * segment_index)  # All other segments
