@@ -69,10 +69,11 @@ def _wait_for_manifest(output_dir: str):
 
 
 def start_transcode(output_dir: str, fileuri: str):
+    # FIXME: Is it even worth doing HLS if this is how we have to do it?
+    # FIXME: Perhaps just turn this into an iterable generator of a single mp4/ts stream and do streaming "old-school"
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    print('OMFG', flush=True)
     # Not using run() because I don't want to wait around for ffmpeg to finish,
     # annoyingly that means I don't get check=True and have to sort out my own returncode handling, if any.
     # FIXME: Implement some sort of cleanup so we don't keep transcoding if the user goes away.
@@ -85,7 +86,6 @@ def start_transcode(output_dir: str, fileuri: str):
             '-f', 'hls', '-hls_playlist_type', 'vod',
             '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
             'hls-manifest.m3u8'])
-    print('WTF', flush=True)
     timer = multiprocessing.Process(target=_wait_for_manifest, args=(output_dir,))
     timer.start()
     timer.join(timeout=5)  # Wait for process to end or 5 seconds, whichever comes first.
@@ -113,8 +113,7 @@ def start_transcode(output_dir: str, fileuri: str):
         try: ffmpeg.wait(timeout=2)                      # noqa: E701
         except subprocess.TimeoutExpired: ffmpeg.kill()  # noqa: E701
 
-        # FIXME: Don't use Exception, make my own exception
-        raise Exception('No manifest file was found, this is bad')
+        raise FileNotFoundError('No manifest file was found after ffmpeg initialisation')
 
 
 def get_manifest(output_dir: str, fileuri: str):
