@@ -64,6 +64,8 @@ def probe(fileuri: str):
 
 def _wait_for_manifest(output_dir: str):
     # FIXME: I should probably at least put a time.sleep(0.1) here
+    # FIXME: Wait for a couple of segments rather than just wait for the manifest.
+    #        Does ffmpeg perhaps do that already?
     while not os.path.isfile(os.path.join(output_dir, 'hls-manifest.m3u8')):
         pass
 
