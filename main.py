@@ -35,20 +35,12 @@ def watch(filename):
     return flask.send_file(os.path.join('static', 'player.html'), mimetype='text/html')
 
 
-@app.route('/watch/<path:filename>/hls-manifest.m3u8')
-def manifest(filename):
+@app.route('/watch/<path:filename>/transcode.mp4')
+def transcode(filename):
     fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
-    return ffmpeg.get_manifest(output_dir, fileuri)
-
-
-@app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
-def hls_segment(filename, index):
-    fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
-
-    return ffmpeg.get_segment(output_dir, index)
+    return flask.Response(ffmpeg.transcode(fileuri),
+                          mimetype='video/mp4')
 
 
 @app.route('/raw_media/<path:filename>')

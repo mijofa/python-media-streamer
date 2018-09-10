@@ -4,6 +4,7 @@
         <!-- FIXME: Host this locally? -->
         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script>
+<!--
         <style type="text/css">
             video {
                 /* Fill the window, use black-borders */
@@ -19,34 +20,114 @@
                 background: black;
             }
         </style>
+-->
     </head>
     <body>
-        <video id="video" controls autoplay />
+        <video width="640" height="365" autoplay id="video" src="transcode.mp4">
+            If you're reading this, your browser does not support HTML5 video tags. Sorry
+        </video>
+  <div id="video-controls">
+    <button type="button" id="play-pause">Play</button>
+    <input type="range" id="seek-bar" value="0">
+    <button type="button" id="mute">Mute</button>
+    <input type="range" id="volume-bar" min="0" max="1" step="0.1" value="1">
+    <button type="button" id="full-screen">Full-Screen</button>
+  </div>
 
-        <!-- Chrome/etc doesn't actually support HLS out of the box, so lets fix that.
-             This is just the Getting Started example from the hls.js documentation -->
-        <script>
-           var video = document.getElementById('video');
-           if(Hls.isSupported()) {
-               var hls = new Hls();
-               hls.loadSource(document.URL+'/hls-manifest.m3u8');
-               hls.attachMedia(video);
-               hls.on(Hls.Events.MANIFEST_PARSED,function() {
-                   video.play();
-               });
-           }
-           // hls.js is not supported on platforms that do not have Media Source Extensions (MSE) enabled.
-           // When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element throught the `src` property.
-           // This is using the built-in support of the plain video element, without using hls.js.
-           // Note: it would be more normal to wait on the 'canplay' event below however on Safari (where you are most likely to find built-in HLS support) the video.src URL must be on the user-driven
-           // white-list before a 'canplay' event will be emitted; the last video event that can be reliably listened-for when the URL is not on the white-list is 'loadedmetadata'.
-           else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-               video.src = document.URL+'/hls-manifest.m3u8';
-               video.addEventListener('loadedmetadata',function() {
-                   video.play();
-               });
-           }
-        </script>
+<script>
+window.onload = function() {
+
+  // Video
+  var video = document.getElementById("video");
+
+  // Buttons
+  var playButton = document.getElementById("play-pause");
+  var muteButton = document.getElementById("mute");
+  var fullScreenButton = document.getElementById("full-screen");
+
+  // Sliders
+  var seekBar = document.getElementById("seek-bar");
+  var volumeBar = document.getElementById("volume-bar");
+
+// Event listener for the play/pause button
+playButton.addEventListener("click", function() {
+  if (video.paused == true) {
+    // Play the video
+    video.play();
+
+    // Update the button text to 'Pause'
+    playButton.innerHTML = "Pause";
+  } else {
+    // Pause the video
+    video.pause();
+
+    // Update the button text to 'Play'
+    playButton.innerHTML = "Play";
+  }
+});
+
+// Event listener for the mute button
+muteButton.addEventListener("click", function() {
+  if (video.muted == false) {
+    // Mute the video
+    video.muted = true;
+
+    // Update the button text
+    muteButton.innerHTML = "Unmute";
+  } else {
+    // Unmute the video
+    video.muted = false;
+
+    // Update the button text
+    muteButton.innerHTML = "Mute";
+  }
+});
+
+// Event listener for the full-screen button
+fullScreenButton.addEventListener("click", function() {
+  if (video.requestFullscreen) {
+    video.requestFullscreen();
+  } else if (video.mozRequestFullScreen) {
+    video.mozRequestFullScreen(); // Firefox
+  } else if (video.webkitRequestFullscreen) {
+    video.webkitRequestFullscreen(); // Chrome and Safari
+  }
+});
+
+// Event listener for the seek bar
+seekBar.addEventListener("change", function() {
+  // Calculate the new time
+  var time = video.duration * (seekBar.value / 100);
+
+  // Update the video time
+  video.currentTime = time;
+});
+
+// Update the seek bar as the video plays
+video.addEventListener("timeupdate", function() {
+  // Calculate the slider value
+  var value = (100 / video.duration) * video.currentTime;
+
+  // Update the slider value
+  seekBar.value = value;
+});
+
+// Pause the video when the slider handle is being dragged
+seekBar.addEventListener("mousedown", function() {
+  video.pause();
+});
+// Play the video when the slider handle is dropped
+seekBar.addEventListener("mouseup", function() {
+  video.play();
+});
+
+// Event listener for the volume bar
+volumeBar.addEventListener("change", function() {
+  // Update the video volume
+  video.volume = volumeBar.value;
+});
+}
+</script>
 
         <!-- Chromecast integration
             This is haphazardly thrown together from Google's Geting started documentation -->
