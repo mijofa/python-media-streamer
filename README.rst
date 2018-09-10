@@ -14,3 +14,11 @@ There's a few pre-existing projects that aim to provide similar, but there's var
 
 
 So the goal with this is to start with having a simple web interface that provides a browser for my local video files (music & playlists as a future enhancement) that will serve out those video files in a format supported by the Chromecast, prefferably without transcoding files that are already supported. As I understand it, I can leave the Chromecast support for the HTML/JS code, so I'm going to focus mostly on the Python code for now and leave that for the 2nd step.
+
+
+TODO
+====
+* Get the pre-transcoded media duration and set the seekbar accordingly (assuming it'll be the same after transcoding)
+  FIXME: It's currently hardcoded to the length of one of my test files
+* Figure out seeking beyond the currently buffered duration.
+  Am I going to need to write some function that pauses until duration >= seeked_time?
