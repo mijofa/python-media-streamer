@@ -161,7 +161,7 @@ brightnessBar.addEventListener("change", function() {
   //       https://developers.google.com/web/updates/2015/01/ES6-Template-Strings
   // FIXME: Make ViM understand that so that syntaxhig-highlighting works better
   // FIXME: Don't completely overwrite all filters just to change the brightness one.
-  video.style.filter = `brightness(${brightnessBar.value})`;
+  video.style.filter = `brightness(${brightnessBar.value}%)`;
 });
 }
 </script>
