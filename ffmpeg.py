@@ -62,6 +62,22 @@ def probe(fileuri: str):
     return {'container': container_info, 'video': v_streams, 'audio': a_streams}
 
 
+def get_duration(fileuri: str):
+    # FIXME: Add a reasonable timeout. What's reasonable?
+    ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
+        'ffprobe', '-loglevel', 'error',
+        '-show_entries', 'format=duration',
+        '-print_format', 'json=compact=1',
+        '-i', fileuri])
+    assert ffprobe.returncode == 0  # check=True should've already taken care of this.
+    probed_info = json.loads(ffprobe.stdout)
+    assert "format" in probed_info
+    assert "duration" in probed_info["format"]
+    assert len(probed_info.keys()) == 1
+    assert len(probed_info["format"].keys()) == 1
+    return float(probed_info["format"]["duration"])
+
+
 def _wait_for_manifest(output_dir: str):
     # FIXME: I should probably at least put a time.sleep(0.1) here
     # FIXME: Wait for a couple of segments rather than just wait for the manifest.
@@ -87,6 +103,11 @@ def start_transcode(output_dir: str, fileuri: str):
             '-acodec', 'libmp3lame', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
             '-f', 'hls', '-hls_playlist_type', 'vod',
             '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
+            # FIXME: Did ffmpeg remove the temp_file flag?
+            # # With Emby I was seeing instances of what looked like the browser caching ahead of what the server had transcoded
+            # # I suspect that's because Emby wasn't using this temp_file flag, but I've not been able to confirm that in any way.
+            # '-hls_flags', 'temp_file',
+            # FIXME: Add the single_file flag?
             'hls-manifest.m3u8'])
     timer = multiprocessing.Process(target=_wait_for_manifest, args=(output_dir,))
     timer.start()

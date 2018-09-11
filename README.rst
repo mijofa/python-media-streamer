@@ -18,7 +18,6 @@ So the goal with this is to start with having a simple web interface that provid
 
 TODO
 ====
-* Get the pre-transcoded media duration and set the seekbar accordingly (assuming it'll be the same after transcoding)
-  FIXME: It's currently hardcoded to the length of one of my test files
 * Figure out seeking beyond the currently buffered duration.
   Am I going to need to write some function that pauses until duration >= seeked_time?
+* Add a brightness slider, put it alongside volume.

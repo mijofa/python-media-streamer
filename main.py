@@ -32,7 +32,7 @@ def index():
 
 @app.route('/watch/<path:filename>')
 def watch(filename):
-    return flask.send_file(os.path.join('static', 'player.html'), mimetype='text/html')
+    return flask.send_from_directory('static', 'player.html', mimetype='text/html')
 
 
 @app.route('/watch/<path:filename>/hls-manifest.m3u8')
@@ -49,6 +49,14 @@ def hls_segment(filename, index):
     output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
     return ffmpeg.get_segment(output_dir, index)
+
+
+@app.route('/watch/<path:filename>/duration')
+def duration(filename):
+    fileuri = get_mediauri(filename)
+
+    # Flask can't handle a float here, so must cast it to a str.
+    return str(ffmpeg.get_duration(fileuri))
 
 
 @app.route('/raw_media/<path:filename>')
