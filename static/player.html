@@ -47,10 +47,13 @@
                 If you're reading this, your browser does not support HTML5 video tags. Sorry
             </video>
             <div id="video-controls">
+            <!-- FIXME: Add output tags or some basic hover popups to indicate the new value -->
                 <button type="button" id="play-pause">Play</button>
+                <!-- FIXME: Use a progress element! Oh wait, that doesn't work as an input -->
                 <input type="range" id="seek-bar" value="0">
                 <button type="button" id="mute">Mute</button>
                 <input type="range" id="volume-bar" min="0" max="1" step="0.1" value="1">
+                <input type="range" id="brightness-bar" min="0" max="200" step="10" value="100">
                 <button type="button" id="full-screen">Full-Screen</button>
             </div>
 
@@ -68,6 +71,7 @@ window.onload = function() {
   // Sliders
   var seekBar = document.getElementById("seek-bar");
   var volumeBar = document.getElementById("volume-bar");
+  var brightnessBar = document.getElementById("brightness-bar");
 
 // Event listener for the play/pause button
 playButton.addEventListener("click", function() {
@@ -146,6 +150,18 @@ seekBar.addEventListener("mouseup", function() {
 volumeBar.addEventListener("change", function() {
   // Update the video volume
   video.volume = volumeBar.value;
+});
+
+// Event listener for the brightness bar
+brightnessBar.addEventListener("change", function() {
+  // Update the video brightness
+  // NOTE: Those are backticks, NOT single-quotes.
+  //       This makes it an ES6 template string, which allows variable substitution/etc,
+  //       but is not supported by all browsers.
+  //       https://developers.google.com/web/updates/2015/01/ES6-Template-Strings
+  // FIXME: Make ViM understand that so that syntaxhig-highlighting works better
+  // FIXME: Don't completely overwrite all filters just to change the brightness one.
+  video.style.filter = `brightness(${brightnessBar.value})`;
 });
 }
 </script>
