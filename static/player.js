@@ -77,13 +77,30 @@ function setup_controls(video) {
     // Event listener for the full-screen button
     // FIXME: Is "click" the right event to use?
     fullScreenButton.addEventListener("click", function() {
-      if (video.requestFullscreen) {
-        video.requestFullscreen();
-      } else if (video.mozRequestFullScreen) {
-        video.mozRequestFullScreen(); // Firefox
-      } else if (video.webkitRequestFullscreen) {
-        video.webkitRequestFullscreen(); // Chrome and Safari
-      }
+        player = document.getElementById('video-container');
+        if (document.webkitIsFullScreen) {
+            if (document.cancelFullScreen) {  
+                document.cancelFullScreen();
+            } else if (document.mozCancelFullScreen) {  
+                document.mozCancelFullScreen();  // Firefox
+            } else if (document.webkitCancelFullScreen) {  
+                document.webkitCancelFullScreen();  // Webkit, Chrome/etc
+            } else if (document.webkitCancelFullScreen) {  
+                document.msCancelFullScreen();  // IE/Edge
+            }  
+            fullScreenButton.classList.remove('active-button');
+		} else {
+            if (player.requestFullscreen) {
+                player.requestFullscreen();
+            } else if (player.mozRequestFullScreen) {
+                player.mozRequestFullScreen();  // Firefox
+            } else if (player.webkitRequestFullscreen) {
+                player.webkitRequestFullscreen();  // Webkit, Chrome/etc
+            } else if (player.msRequestFullscreen) {
+                player.msRequestFullscreen();  // IE/Edge
+            }
+            fullScreenButton.classList.add('active-button');
+		}
     });
     
     // Can't determine the length of the video in JS alone until the entire cache is filled, so let's ask the server.
@@ -131,7 +148,7 @@ function setup_controls(video) {
       //       This makes it an ES6 template string, which allows variable substitution/etc,
       //       but is not supported by all browsers.
       //       https://developers.google.com/web/updates/2015/01/ES6-Template-Strings
-      // FIXME: Make ViM understand that so that syntaxhig-highlighting works better
+      // FIXME: Make ViM understand that so that syntax-highlighting works better
       // FIXME: Don't completely overwrite all filters just to change the brightness one.
       video.style.filter = `brightness(${brightnessBar.value}%)`;
     });
@@ -162,13 +179,7 @@ function init_hls(video) {
     }
 }
 
-window.onload = function() {
-    var video_player = document.getElementById("video-player");
-
-    setup_controls(video_player);
-    
-    init_hls(video_player);
-    
+function setup_casting() {
     /* Chromecast integration
      * This is haphazardly thrown together from Google's Geting started documentation
      */
@@ -246,5 +257,15 @@ window.onload = function() {
     function stopApp() {
       session.stop(onSuccess, onError);
     }
+}
+
+window.onload = function() {
+    var video_player = document.getElementById("video-player");
+
+    setup_controls(video_player);
     
+    init_hls(video_player);
+    
+    // // NotYetImplemented
+    // setup_casting()
 }

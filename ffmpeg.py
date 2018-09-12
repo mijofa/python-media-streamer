@@ -63,6 +63,7 @@ def probe(fileuri: str):
 
 
 def get_duration(fileuri: str):
+    # FIXME: Can ffmpeg just tell us the duration as it starts up?
     # FIXME: Add a reasonable timeout. What's reasonable?
     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
         'ffprobe', '-loglevel', 'error',
