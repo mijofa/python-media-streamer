@@ -41,12 +41,12 @@ function setup_controls(video) {
     video.addEventListener("pause", function() {
         // Update the button text to 'Play'
         // FIXME: Style this better
-        playButton.innerHTML = "▶";
+        playButton.innerHTML = "&#x25B6;";
     });
     video.addEventListener("play", function() {
         // Update the button text to 'Pause'
         // FIXME: Style this better
-        playButton.innerHTML = "| |";
+        playButton.innerHTML = "|&nbsp;|";
     });
     
     // Event listener for the mute button
@@ -61,14 +61,13 @@ function setup_controls(video) {
       }
     });
     video.addEventListener("volumechange", function() {
+      // FIXME: Update the volume slider as well
       if (video.muted == false) {
         // Update the button text
-        // FIXME: Style this better
-        muteButton.innerHTML = "Mute";
+        muteButton.classList.remove('active-button');
       } else {
         // Update the button text
-        // FIXME: Style this better
-        muteButton.innerHTML = "Unmute";
+        muteButton.classList.add('active-button');
       }
     });
     // Simply trigger ^ that event listener, so I don't need to pre-initialise the HTML correctly.
@@ -98,8 +97,10 @@ function setup_controls(video) {
 
     // Event listener for the seek bar
     seekBar.addEventListener("change", function() {
-      // Update the video time
-      video.currentTime = seekBar.value;
+        // Update the video time
+        // FIXME: Figure out seeking beyond the currently buffered duration.
+        //        Perhaps this requires pausing until duration >= seeked_time
+        video.currentTime = seekBar.value;
     });
     
     // Update the seek bar as the video plays

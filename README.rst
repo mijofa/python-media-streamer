@@ -18,6 +18,3 @@ So the goal with this is to start with having a simple web interface that provid
 
 TODO
 ====
-* Figure out seeking beyond the currently buffered duration.
-  Am I going to need to write some function that pauses until duration >= seeked_time?
-* Add a brightness slider, put it alongside volume.

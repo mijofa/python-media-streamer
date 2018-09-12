@@ -4,23 +4,30 @@
         <!-- FIXME: Host this locally? -->
         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script>
-        <link rel="stylesheet" type="text/css" href="/static/player.css">
-        <script type="text/javascript" src="/static/player.js"></script>
+        <link rel="stylesheet" type="text/css" href="player.css">
+        <script type="text/javascript" src="player.js"></script>
     </head>
     <body>
         <div id="video-container">
             <video autoplay id="video-player">
                 If you're reading this, your browser does not support HTML5 video tags. Sorry
             </video>
-            <div id="video-controls">
-            <!-- FIXME: Add output tags or some basic hover popups to indicate the new value -->
-                <button type="button" id="play-pause">...</button>
-                <!-- FIXME: Use a progress element! Oh wait, that doesn't work as an input -->
-                <input type="range" id="seek-bar" value="0">
-                <button type="button" id="mute">...</button>
-                <input type="range" id="volume-bar" min="0" max="1" step="0.1" value="1">
-                <input type="range" id="brightness-bar" min="0" max="200" step="10" value="100">
-                <button type="button" id="full-screen">Full-Screen</button>
-            </div>
+            <table id="video-controls"><tbody><tr>
+            <!-- FIXME: Add output tags or some basic hover popups to indicate the new range values -->
+                <td><button type="button" id="play-pause">&#x21BA;</button></td>
+                <td class="seek-container">
+                    <!-- FIXME: Use a progress element! Oh wait, that doesn't work as an input -->
+                    <!-- FIXME: Use a progress element behind the range element to show buffered -->
+                    <input type="range" id="seek-bar" value="0">
+                </td>
+                <td><button type="button" id="mute">Mute</button></td>
+                <!-- orient="vertical" only actually has an affect in Firefox, but I'm going to use it in my CSS to simplify cross-browser compatibility. -->
+                <td><input class="vexpand-onhover" orient="vertical" type="range" id="volume-bar" min="0" max="1" step="0.1" value="1"></td>
+                <td class="toggle-onhover">
+                    <input class="default-hidden" orient="vertical" type="range" id="brightness-bar" min="0" max="200" step="10" value="100">
+                    <div   class="default-shown">&#x2600;</div>
+                </td>
+                <td><button type="button" id="full-screen">Fullscreen</button></td>
+            </tr></tbody></table>
     </body>
 </html>

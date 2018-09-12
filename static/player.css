@@ -1,4 +1,4 @@
-#video-container {
+#video-container, video {
     /* Fill the window, use black-borders */
     position: fixed;
     width: 100%;
@@ -9,26 +9,61 @@
     left: 0;
     right: 0;
 
+    z-index: 0;
     background: black;
+    color: white;
 }
-#video-player {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
 
-    z-index: 5
-}
 #video-controls {
     position: absolute;
     width: 100%;
-    height: 5%;
     left: 0;
+    right: 0;
     bottom: 0;
 
     z-index: 10
 }
-#seek-bar {
-    width: 50%;
+
+/* Make the seekbar take up as much width as it can */
+#video-controls td.seek-container, input[type=range]#seek-bar {
+    width: 100%;
 }
+/* Make sure all the controls are on the bottom, and that the controls are somewhat more readable */
+#video-controls td {
+    min-width: 1em;
+    font-size: x-large;
+    vertical-align: bottom;
+}
+
+/* Firefox sets the slider orientation with a HTML property, make that same property work in Webkit and (untested) IE.
+ * FIXME: Just use "transform: rotate(270deg);"?
+ */
+input[type=range][orient=vertical] {
+    width: 1em;
+    writing-mode: bt-lr; /* IE */
+    -webkit-appearance: slider-vertical; /* WebKit, Chrome/etc */
+}
+
+.vexpand-onhover {
+    height: 1.5em;
+}
+.vexpand-onhover:hover {
+    height: unset;
+}
+
+.toggle-onhover > .default-hidden     {display: none}
+.toggle-onhover:hover        .default-hidden,
+.toggle-onhover:focus-within .default-hidden {
+    display: unset
+}
+.toggle-onhover:hover        .default-shown,
+.toggle-onhover:focus-within .default-shown {
+    display: none
+}
+
+/*  */
+button:active, button.active-button {
+    border-style: inset;
+    padding: 1px 6px;
+}
+
