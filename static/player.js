@@ -163,6 +163,8 @@ function init_hls(video) {
         hls.loadSource(document.URL+'/hls-manifest.m3u8');
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED,function() {
+            // FIXME: Add a delay here to get some buffering done first.
+            //        Trigger on the canplaythrough event instead?
             video.play();
         });
     }
