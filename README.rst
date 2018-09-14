@@ -18,3 +18,4 @@ So the goal with this is to start with having a simple web interface that provid
 
 TODO
 ====
+* Fix the seekTo function, currently it hangs the tab
