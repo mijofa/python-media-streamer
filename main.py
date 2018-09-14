@@ -40,7 +40,9 @@ def manifest(filename):
     fileuri = get_mediauri(filename)
     output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
-    return ffmpeg.get_manifest(output_dir, fileuri)
+    resp = flask.make_response(ffmpeg.get_manifest(output_dir, fileuri))
+    resp.cache_control.no_cache = True
+    return resp
 
 
 @app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
