@@ -23,9 +23,14 @@ function setup_controls(video) {
     var muteButton = document.getElementById("mute");
     var fullScreenButton = document.getElementById("full-screen");
     // Sliders
-    var seekBar = document.getElementById("seek-bar");
     var volumeBar = document.getElementById("volume-bar");
     var brightnessBar = document.getElementById("brightness-bar");
+    var seekBar = document.getElementById("seek-bar");
+
+    var seekableCanvas = document.getElementById("seekable-canvas");
+    var seekableContext = seekableCanvas.getContext('2d');
+    var bufferedCanvas = document.getElementById("buffered-canvas");
+    var bufferedContext = bufferedCanvas.getContext('2d');
 
     // Event listener for the play/pause button
     // FIXME: Is "click" the right event to use?
@@ -133,6 +138,39 @@ function setup_controls(video) {
     // Play the video when the slider handle is dropped
     seekBar.addEventListener("mouseup", function() {
       video.play();
+    });
+
+    /* Display progress of the buffered data */
+    bufferedCanvasStyle = window.getComputedStyle(bufferedCanvas);
+//    bufferedContext.fillStyle = bufferedCanvasStyle.getPropertyValue('background-color');;
+//    bufferedContext.fillRect(0, 0, bufferedCanvas.width, bufferedCanvas.height);
+    bufferedContext.fillStyle = bufferedCanvasStyle.getPropertyValue('color');
+    video.addEventListener("progress", function() {
+        var inc = bufferedCanvas.width / vidLength
+        for (i=0; i<video.buffered.length; i++) {
+            var startX = video.buffered.start(i) * inc;
+            var endX = video.buffered.end(i) * inc;
+            var width = endX - startX;
+
+            bufferedContext.fillRect(startX, 0, width, bufferedCanvas.height);
+        }
+    });
+    
+    /* Display progress of the seekable data */
+    /* This should effectively be what the server has transcoded so far */
+    seekableCanvasStyle = window.getComputedStyle(seekableCanvas);
+    seekableContext.fillStyle = seekableCanvasStyle.getPropertyValue('background-color');
+    seekableContext.fillRect(0, 0, seekableCanvas.width, seekableCanvas.height);
+    seekableContext.fillStyle = seekableCanvasStyle.getPropertyValue('color');
+    video.addEventListener("progress", function() {
+        var inc = seekableCanvas.width / vidLength
+        for (i=0; i<video.seekable.length; i++) {
+            var startX = video.seekable.start(i) * inc;
+            var endX = video.seekable.end(i) * inc;
+            var width = endX - startX;
+
+            seekableContext.fillRect(startX, 0, width, seekableCanvas.height);
+        }
     });
     
     // Event listener for the volume bar

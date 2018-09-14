@@ -1,38 +1,50 @@
 #video-container, video {
     /* Fill the window, use black-borders */
     position: fixed;
-    width: 100%;
-    height: 100%;
-
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: 0;
-
+    width: 100% ; height: 100%;
+    top: 0 ; bottom: 0 ; left: 0 ; right:0;
     z-index: 0;
-    background: black;
-    color: white;
+    background: black ; color: white;
 }
-
 #video-controls {
-    position: absolute;
+    position: fixed;
+    /* bottom: must be kept in sync with "#video-controls .seek-container * {height:" */
+    bottom: 3%;
+
     width: 100%;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 
     z-index: 10
 }
-
-/* Make the seekbar take up as much width as it can */
-#video-controls td.seek-container, input[type=range]#seek-bar {
-    width: 100%;
+#seek-container * {
+    position: fixed;
+    bottom: 1%; height: 2%;
+    width: 99%;  /* Leaves a margin of 1% */
+    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 }
+#seek-bar {
+    /* Make sure the range element is above the buffered canvas */
+    z-index: 20
+}
+
 /* Make sure all the controls are on the bottom, and that the controls are somewhat more readable */
-#video-controls td {
+#video-controls * {
     min-width: 1em;
     font-size: x-large;
     vertical-align: bottom;
+}
+
+#seekable-canvas {
+/*    filter: opacity(50%); */
+    color: blue;
+    z-index: 11;
+    background: black;
+}
+#buffered-canvas {
+    filter: opacity(50%);
+    color: red;
+    z-index: 12;
+    background: black;
 }
 
 /* Firefox sets the slider orientation with a HTML property, make that same property work in Webkit and (untested) IE.
