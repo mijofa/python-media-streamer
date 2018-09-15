@@ -35,13 +35,13 @@
 }
 
 #seekable-canvas {
-/*    filter: opacity(50%); */
-    color: blue;
+    filter: opacity(75%);
+    color: red;
     z-index: 11;
     background: black;
 }
 #buffered-canvas {
-    filter: opacity(50%);
+    filter: opacity(75%);
     color: red;
     z-index: 12;
     background: black;
