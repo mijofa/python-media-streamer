@@ -1,16 +1,9 @@
 #!/usr/bin/python3
 import json
-import multiprocessing
+import math
 import operator
 import os
-import signal
 import subprocess
-import sys
-
-import flask
-
-# Emby's ffmpeg invocation when watching a movie from Chrome Desktop on Debian:
-#      /opt/emby-server/bin/ffmpeg -f matroska,webm -i file:/srv/media/Video/TV/Stitchers/S03E02.mkv -threads 0 -map 0:0 -map 0:1 -map -0:s -codec:v:0 libx264 -vf scale=trunc(min(max(iw\,ih*dar)\,1920)/2)*2:trunc(ow/dar/2)*2 -pix_fmt yuv420p -preset veryfast -crf 23 -maxrate 4148908 -bufsize 8297816 -profile:v high -level 4.1 -x264opts:0 subme=0:me_range=4:rc_lookahead=10:me=dia:no_chroma_me:8x8dct=0:partitions=none -force_key_frames expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3)) -copyts -vsync -1 -codec:a:0 copy -f segment -max_delay 5000000 -avoid_negative_ts disabled -map_metadata -1 -map_chapters -1 -start_at_zero -segment_time 3 -individual_header_trailer 0 -segment_format mpegts -segment_list_type m3u8 -segment_start_number 0 -segment_list /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b.m3u8 -y /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b%d.ts  # noqa: E501
 
 ### FIXME: These are mostly just assumed by grepping ffprobe -formats & -codecs for each of the things mentioned at
 ###        https://developers.google.com/cast/docs/media
@@ -80,73 +73,80 @@ def get_duration(fileuri: str):
     return float(probed_info["format"]["duration"])
 
 
-def _wait_for_manifest(output_dir: str):
-    # FIXME: I should probably at least put a time.sleep(0.1) here
-    # FIXME: Wait for a couple of segments rather than just wait for the manifest.
-    #        Does ffmpeg perhaps do that already?
-    while not os.path.isfile(os.path.join(output_dir, 'hls-manifest.m3u8')):
-        pass
+def get_manifest(fileuri: str):
+    duration = get_duration(fileuri)
+    segment_count = math.ceil(duration / 6)
+    m3u = ["#EXTM3U",
+           "#EXT-X-VERSION:3",
+           "#EXT-X-MEDIA-SEQUENCE:0",
+           "#EXT-X-PLAYLIST-TYPE:VOD",
+           "#EXT-X-ALLOW-CACHE:NO",  # FIXME: Allow caching after some testing has been done
+           # "#EXT-X-START:"  # Probably wanna use this to set a save point
+           "#EXT-X-TARGETDURATION:6",
+           ] + ["#EXTINF:6.000000,\n"
+                "hls-segment-{index}.ts".format(index=segment_index)
+                for segment_index in range(0, segment_count)
+                ] + ["#EXT-X-ENDLIST"]
+    return '\n'.join(m3u)
 
 
-def start_transcode(output_dir: str, fileuri: str):
-    # FIXME: Is it even worth doing HLS if this is how we have to do it?
-    # FIXME: Perhaps just turn this into an iterable generator of a single mp4/ts stream and do streaming "old-school"
-    if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
+def get_segment(fileuri: str, index: int):
+    (pipe_out, pipe_in) = os.pipe2(os.O_NONBLOCK)
 
-    # Not using run() because I don't want to wait around for ffmpeg to finish,
-    # annoyingly that means I don't get check=True and have to sort out my own returncode handling, if any.
-    # FIXME: Implement some sort of cleanup so we don't keep transcoding if the user goes away.
+    # FIXME: This will *always* report a non-zero exit status.
+    # FIXME: Do some actually error reporting.
+    # NOTE: I'm creating 10 second segments, but then treating them as 6 second segments.
+    #       This means there's 3 seconds overlap across each segment, but it helps avoid stuttering.
     ffmpeg = subprocess.Popen(
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL, universal_newlines=True,
-        cwd=output_dir, args=[
-            'ffmpeg', '-loglevel', 'error', '-nostdin',
-            '-i', fileuri,  # Everything after this only applies to the output
-            '-acodec', 'libmp3lame', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
-            '-f', 'hls', '-hls_playlist_type', 'vod',
-            '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
-            # FIXME: Did ffmpeg remove the temp_file flag?
-            # # With Emby I was seeing instances of what looked like the browser caching ahead of what the server had transcoded
-            # # I suspect that's because Emby wasn't using this temp_file flag, but I've not been able to confirm that in any way.
-            # '-hls_flags', 'temp_file',
-            # FIXME: Add the single_file flag?
-            'hls-manifest.m3u8'])
-    timer = multiprocessing.Process(target=_wait_for_manifest, args=(output_dir,))
-    timer.start()
-    timer.join(timeout=5)  # Wait for process to end or 5 seconds, whichever comes first.
+        pass_fds=(pipe_in,),
+        args=[
+            'ffmpeg', '-loglevel', 'error',
+            '-accurate_seek', '-ss', str(index * 6),
+            '-i', fileuri,
+            '-map', '0:0', '-map', '0:1',
+            '-codec:a', 'libmp3lame', '-codec:v', 'libx264',
+            '-force_key_frames', 'expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3))',
+            '-copyts', '-vsync', '-1', '-f', 'segment', '-avoid_negative_ts', 'disabled',
+            '-start_at_zero', '-segment_time', '10', '-segment_time_delta', '-{}'.format(index * 6),
+            '-individual_header_trailer', '0', '-break_non_keyframes', '1',
+            '-segment_format', 'mpegts', '-segment_list_type', 'flat',
+            # NOTE: The segment_start_number needs to be the FD number, it doesn't actually affect the contents of the segment,
+            #       just filename of the first segment, so "pipe:%d" will match the FD it should go out on.
+            '-segment_list', 'pipe:1', '-segment_start_number', str(pipe_in), 'pipe:%d',
+        ])
 
-    if ffmpeg.poll():
-        # I know there's subprocess.run().check_returncode() but Popen doesn't have similar, so I gotta do it myself.
-        #
-        # I'm only defining this variable instead of putting it all on the raise line so that the backtrace looks nicer
-        err = ffmpeg.stderr.read().decode()
-        print(err, file=sys.stderr, flush=True)
-        FfmpegError = subprocess.CalledProcessError(
-            returncode=ffmpeg.returncode,
-            cmd=ffmpeg.args,
-            # output=ffmpeg.stdout.read(),  # I've already captured the stdout, so this is useless.
-            stderr=err,
-        )
-        raise FfmpegError
+    try:
+        while True:
+            try:
+                data = os.read(pipe_out, 1024)
+            except BlockingIOError:
+                if ffmpeg.poll() is None:
+                    # ffmpeg's still running, there's just no data waiting for us
+                    continue
+                else:
+                    # Ffmpeg's finished, and not closed the fd properly.
+                    # This is actually expected, the fd never gets closed properly.
+                    break
 
-    if timer.is_alive():  # Shit, we timed out without finding a manifest
-        # Cleanup the timer, and ffmpeg
-        timer.terminate()
-        # ffmpeg doesn't acknowledge a SIGTERM, but it does die on SIGINT
-        ffmpeg.send_signal(signal.SIGINT)
-        # If that didn't work, SIGKILL it
-        try: ffmpeg.wait(timeout=2)                      # noqa: E701
-        except subprocess.TimeoutExpired: ffmpeg.kill()  # noqa: E701
+            yield data
+    except GeneratorExit as e:
+        # FIXME: Do this cleaner, ffmpeg only actually cleanly shuts down from a SIGINT
+        ffmpeg.kill()
+        ffmpeg.terminate()
+    finally:
+        os.close(pipe_in)
+        os.close(pipe_out)
 
-        raise FileNotFoundError('No manifest file was found after ffmpeg initialisation')
-
-
-def get_manifest(output_dir: str, fileuri: str):
-    if not os.path.isfile(os.path.join(output_dir, 'hls-manifest.m3u8')):
-        start_transcode(output_dir, fileuri)
-
-    return flask.send_from_directory(output_dir, 'hls-manifest.m3u8', mimetype='application/x-mpegURL')
-
-
-def get_segment(output_dir: str, index: int):
-    return flask.send_from_directory(output_dir, 'hls-segment-{index:d}.ts'.format(index=index), mimetype='video/mp2t')
+    #        'ffmpeg', '-loglevel', 'error', '-nostdin',
+    #        '-i', fileuri,  # Everything after this only applies to the output
+    #        '-acodec', 'libmp3lame', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
+    #        '-f', 'hls', '-hls_playlist_type', 'vod',
+    #        '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
+    #        # FIXME: Did ffmpeg remove the temp_file flag?
+    #        # # With Emby I was seeing instances of what looked like the browser caching ahead of what the server had transcoded
+    #        # # I suspect that's because Emby wasn't using this temp_file flag, but I've not been able to confirm that in any way.
+    #        # '-hls_flags', 'temp_file',
+    #        # FIXME: Add the single_file flag?
+    #        'hls-manifest.m3u8'])

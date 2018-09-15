@@ -8,11 +8,6 @@ import ffmpeg
 
 app = flask.Flask("web-emcee")
 
-# NOTE: This temporary directory is not secure because it's predictable,
-#       but I'm only intending to use it for transcoding cache, so that's ok.
-# FIXME: Clear this cache on startup
-TMP_DIR = os.path.join(os.environ.get('XDG_RUNTIME_DIR', os.environ.get('TMPDIR', '/tmp/')), app.name)
-
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
 
@@ -39,9 +34,8 @@ def watch(filename):
 @app.route('/watch/<path:filename>/hls-manifest.m3u8')
 def manifest(filename):
     fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
-    resp = flask.make_response(ffmpeg.get_manifest(output_dir, fileuri))
+    resp = flask.make_response(ffmpeg.get_manifest(fileuri))
     resp.cache_control.no_cache = True
     return resp
 
@@ -49,9 +43,9 @@ def manifest(filename):
 @app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
 def hls_segment(filename, index):
     fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
 
-    return ffmpeg.get_segment(output_dir, index)
+    return flask.Response(ffmpeg.get_segment(fileuri, index),
+                          mimetype='video/mp2t')
 
 
 @app.route('/watch/<path:filename>/duration')
@@ -92,6 +86,4 @@ def get_ip():
 
 
 if __name__ == "__main__":
-    if not os.path.isdir(TMP_DIR):
-        os.mkdir(TMP_DIR)
     app.run(debug=True, host='0.0.0.0', threaded=True)
