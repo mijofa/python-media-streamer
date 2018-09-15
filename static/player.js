@@ -2,6 +2,27 @@
 // Plus, it makes console debugging easier.
 var video_player;
 
+var controls_timer = null;
+
+function controlsShow(duration = 0) {
+    document.getElementById("video-controls").classList.remove("hidden")
+    document.body.classList.remove("hide-mouse")
+
+    if (controls_timer) {
+        controls_timer = clearTimeout(controls_timer);
+    }
+    if (duration > 0) {
+        controls_timer = setTimeout(controlsHide, duration * 1000)
+    }
+}
+function controlsHide() {
+    document.getElementById("video-controls").classList.add("hidden")
+    document.body.classList.add("hide-mouse")
+    if (controls_timer) {
+        controls_timer = clearTimeout(controls_timer);
+    }
+}
+
 function videoPauseToggle() {
     if (video_player.paused == true)
          {video_player.play()  }
@@ -14,9 +35,33 @@ function videoMuteToggle() {
     else {video_player.muted = false }
 }
 
+function secondsToString(seconds) {
+    hours   = Math.floor( seconds / 3600 );
+    minutes = Math.floor( ( seconds - ( hours * 3600 ) ) / 60 );
+    seconds = Math.round( seconds - ( minutes * 60 ) - ( hours * 3600 ))
+
+    ret_str = ''
+
+    h = hours.toString()
+    while (h.length < 2) {
+        h = "0" + h;
+    }
+
+    m = minutes.toString()
+    while (m.length < 2) {
+        m = "0" + m;
+    }
+    
+    s = seconds.toString()
+    while (s.length < 2) {
+        s = "0" + s;
+    }
+
+    return h+":"+m+":"+s
+}
 
 function _videoSeekBeyondDuration(time, unpause) {
-    if (time >= vidLength) {
+    if (time >= video_player.total_duration) {
         console.log("Seeking beyond end of file, I don't know how to deal with this yet");
     } else {
         // Jump to the specified time regardless of the current duration to keep the buffer going.
@@ -48,7 +93,7 @@ function videoSeek(time) {
     //
     // FIXME: Figure out seeking beyond the currently buffered duration.
     //        Perhaps this requires pausing until duration >= seeked_time
-    if (time >= vidLength) {
+    if (time >= video_player.total_duration) {
         console.log("Seeking beyond end of file, I don't know how to deal with this yet");
     } else {
         if (video_player.paused != true) {
@@ -59,6 +104,15 @@ function videoSeek(time) {
         }
         _videoSeekBeyondDuration(time, !was_paused)
     }
+}
+
+function videoToggleFullscreen() {
+    player = document.getElementById('video-container');
+    if (document.webkitIsFullScreen) {
+        document.webkitCancelFullScreen();
+	} else {
+        player.webkitRequestFullscreen();
+	}
 }
 
 function setup_controls() {
@@ -86,7 +140,7 @@ function setup_controls() {
     // FIXME: Is "click" the right event to use?
     muteButton.addEventListener("click", videoMuteToggle);
     // Event listener for the volume bar
-    volumeBar.addEventListener("change", _ => video_player.volume = volumeBar.valueAsNumber / volumeBar.max );
+    volumeBar.addEventListener("input", ev => video_player.volume = ev.target.valueAsNumber / ev.target.max );
 
     // Update the mute button & volume slider on state change
     video_player.addEventListener("volumechange", function(ev) {
@@ -100,12 +154,14 @@ function setup_controls() {
     video_player.dispatchEvent(new CustomEvent("volumechange", {}))
     
 
-    // Can't determine the length of the video in JS alone until the entire cache is filled, so let's ask the server.
+    // Can't determine the length of the video in JS alone until the entire cache is filled,
+    // so let's ask the server to check the duration of the pre-transcoded file.
     var req = new XMLHttpRequest();
     req.open("GET", document.URL+"/duration", true);
     req.onload = function(e) {
-        vidLength = parseFloat(req.responseText);
-        seekBar.max = vidLength;
+        video_player.total_duration = parseFloat(req.responseText);
+        seekBar.max = video_player.total_duration;
+        document.getElementById("position-end").innerHTML = secondsToString(video_player.total_duration)
     }
     req.send()
 
@@ -114,8 +170,8 @@ function setup_controls() {
     
     // Update the seek bar as the video plays
     video_player.addEventListener("timeupdate", function() {
-      // Update the slider value
-      seekBar.value = video_player.currentTime;
+        seekBar.value = video_player.currentTime;
+        document.getElementById("position-current").innerHTML = secondsToString(video_player.currentTime)
     });
     
     // Pause the video when the slider handle is being dragged
@@ -123,44 +179,42 @@ function setup_controls() {
     // Play the video when the slider handle is dropped
     seekBar.addEventListener("mouseup",   _ => video_player.play());
 
-    /* Display progress of the buffered data */
-    var bufferedCanvasStyle = window.getComputedStyle(bufferedCanvas);
-//    bufferedContext.fillStyle = bufferedCanvasStyle.getPropertyValue('background-color');;
-//    bufferedContext.fillRect(0, 0, bufferedCanvas.width, bufferedCanvas.height);
-    bufferedContext.fillStyle = bufferedCanvasStyle.getPropertyValue('color');
-    bufferedContext.strokeStyle = bufferedContext.fillStyleA;
-    video_player.addEventListener("progress", function() {
-        var inc = bufferedCanvas.width / vidLength
-        for (i=0; i<video_player.buffered.length; i++) {
-            var startX = video_player.buffered.start(i) * inc;
-            var endX = video_player.buffered.end(i) * inc;
-            var width = endX - startX;
-
-            bufferedContext.fillRect(startX, 0, width, bufferedCanvas.height);
-            bufferedContext.strokeRect(startX, 0, width, bufferedCanvas.height);
-        }
-    });
-    
     /* Display progress of the seekable data */
     /* This should effectively be what the server has transcoded so far */
     var seekableCanvasStyle = window.getComputedStyle(seekableCanvas);
-//    seekableContext.fillStyle = seekableCanvasStyle.getPropertyValue('background-color');
-//    seekableContext.fillRect(0, 0, seekableCanvas.width, seekableCanvas.height);
     seekableContext.fillStyle = seekableCanvasStyle.getPropertyValue('color');
     seekableContext.strokeStyle = seekableContext.fillStyle;
-    video_player.addEventListener("progress", function() {
-        var inc = seekableCanvas.width / vidLength
+    var bufferedCanvasStyle = window.getComputedStyle(bufferedCanvas);
+    bufferedContext.fillStyle = bufferedCanvasStyle.getPropertyValue('color');
+    bufferedContext.strokeStyle = bufferedContext.fillStyle;
+
+    var update_canvases = function() {
+        var inc = seekableCanvas.width / video_player.total_duration
         for (i=0; i<video_player.seekable.length; i++) {
             var startX = video_player.seekable.start(i) * inc;
             var endX = video_player.seekable.end(i) * inc;
             var width = endX - startX;
 
-            seekableContext.fillRect(startX, 0, width, seekableCanvas.height);
-            seekableContext.strokeRect(startX, 0, width, seekableCanvas.height);
+            seekableContext.rect(startX, 0, width, seekableCanvas.height);
+            seekableContext.fill();
+            seekableContext.stroke();
         }
-    });
+
+        var inc = bufferedCanvas.width / video_player.total_duration
+        for (i=0; i<video_player.buffered.length; i++) {
+            var startX = video_player.buffered.start(i) * inc;
+            var endX = video_player.buffered.end(i) * inc;
+            var width = endX - startX;
+
+            bufferedContext.rect(startX, 0, width, bufferedCanvas.height);
+            bufferedContext.fill();
+            bufferedContext.stroke();
+        }
+    };
+
+    video_player.addEventListener("durationchange", update_canvases)
+    video_player.addEventListener("progress", update_canvases)
     
-    //
     // Event listener for the brightness bar
     // NOTE: Those are backticks, NOT single-quotes.
     //       This makes it an ES6 template string, which allows variable substitution/etc,
@@ -168,37 +222,19 @@ function setup_controls() {
     //       https://developers.google.com/web/updates/2015/01/ES6-Template-Strings
     // FIXME: Make ViM understand that so that syntax-highlighting works better
     // FIXME: Don't completely overwrite all filters just to change the brightness one.
-    brightnessBar.addEventListener("input", _ => video_player.style.filter = `brightness(${brightnessBar.valueAsNumber}%)` );
+    brightnessBar.addEventListener("input", ev => video_player.style.filter = `brightness(${ev.target.valueAsNumber}%)` );
     
     // Event listener for the full-screen button
     // FIXME: Is "click" the right event to use?
-    fullScreenButton.addEventListener("click", function() {
-        player = document.getElementById('video-container');
+    fullScreenButton.addEventListener("click", videoToggleFullscreen);
+    document.addEventListener('webkitfullscreenchange',function(ev) {
         if (document.webkitIsFullScreen) {
-            if (document.cancelFullScreen) {  
-                document.cancelFullScreen();
-            } else if (document.mozCancelFullScreen) {  
-                document.mozCancelFullScreen();  // Firefox
-            } else if (document.webkitCancelFullScreen) {  
-                document.webkitCancelFullScreen();  // Webkit, Chrome/etc
-            } else if (document.webkitCancelFullScreen) {  
-                document.msCancelFullScreen();  // IE/Edge
-            }  
-            fullScreenButton.classList.remove('active-button');
-		} else {
-            if (player.requestFullscreen) {
-                player.requestFullscreen();
-            } else if (player.mozRequestFullScreen) {
-                player.mozRequestFullScreen();  // Firefox
-            } else if (player.webkitRequestFullscreen) {
-                player.webkitRequestFullscreen();  // Webkit, Chrome/etc
-            } else if (player.msRequestFullscreen) {
-                player.msRequestFullscreen();  // IE/Edge
-            }
             fullScreenButton.classList.add('active-button');
-		}
+        } else {
+            fullScreenButton.classList.remove('active-button');
+        }
     });
-    
+    window.addEventListener("dblclick", videoToggleFullscreen, false);
 
 
     // Keyboard shortcuts
@@ -218,7 +254,7 @@ function setup_controls() {
           break;
         case "ArrowLeft":
           console.debug("Jumping backward due to user keypress");
-          videoSeek(video_player.currentTime - 20);
+          videoSeek(video_player.currentTime - 10);
           break;
         case "ArrowRight":
           console.debug("Jumping forward due to user keypress");
@@ -233,6 +269,10 @@ function setup_controls() {
           // otherwise we might get doubling up on the pause button, or some other button getting pressed as well.
           key_ev.preventDefault();
           break;
+        case "f":
+          console.debug("Toggling fullscreen due to user keypress");
+          videoToggleFullscreen();
+          break;
         case "m":
           console.debug("Toggling mute due to user keypress");
           videoMuteToggle();
@@ -242,6 +282,8 @@ function setup_controls() {
           break;
       }
     }
+    window.addEventListener("mousemove", _ => controlsShow(3), false);
+    window.addEventListener("keydown",   _ => controlsShow(3), false);
     window.addEventListener("keydown", process_keydown, false);
 }
 

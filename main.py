@@ -10,6 +10,7 @@ app = flask.Flask("web-emcee")
 
 # NOTE: This temporary directory is not secure because it's predictable,
 #       but I'm only intending to use it for transcoding cache, so that's ok.
+# FIXME: Clear this cache on startup
 TMP_DIR = os.path.join(os.environ.get('XDG_RUNTIME_DIR', os.environ.get('TMPDIR', '/tmp/')), app.name)
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir

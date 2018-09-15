@@ -1,3 +1,8 @@
+:root {
+    --accent-colour: red;
+}
+
+
 #video-container, video {
     /* Fill the window, use black-borders */
     position: fixed;
@@ -8,17 +13,20 @@
 }
 #video-controls {
     position: fixed;
-    /* bottom: must be kept in sync with "#video-controls .seek-container * {height:" */
+    /* NOTE: bottom must be set to at least the top of #seek-container, */
+    /*       so make sure it matches #seek-container's height, margin, etc */
     bottom: 3%;
 
     width: 100%;
     left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 
-    z-index: 10
+    z-index: 10;
+
+    transition: opacity 0.5s ease-in-out;
 }
 #seek-container * {
     position: fixed;
-    bottom: 1%; height: 2%;
+    bottom: 0.5%; height: 2%;
     width: 99%;  /* Leaves a margin of 1% */
     left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 }
@@ -35,16 +43,13 @@
 }
 
 #seekable-canvas {
-    filter: opacity(75%);
-    color: red;
+    filter: opacity(50%);
+    color: var(--accent-colour);
     z-index: 11;
-    background: black;
 }
 #buffered-canvas {
-    filter: opacity(75%);
-    color: red;
+    color: var(--accent-colour);
     z-index: 12;
-    background: black;
 }
 
 /* Firefox sets the slider orientation with a HTML property, make that same property work in Webkit and (untested) IE.
@@ -78,4 +83,10 @@ button:active, button.active-button {
     border-style: inset;
     padding: 1px 6px;
 }
+
+
+.hidden {
+    opacity: 0;
+}
+body.hide-mouse {cursor:none}
 
