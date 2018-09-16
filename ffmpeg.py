@@ -98,7 +98,7 @@ def get_segment(fileuri: str, index: int):
     # NOTE: I'm creating 10 second segments, but then treating them as 6 second segments.
     #       This means there's 3 seconds overlap across each segment, but it helps avoid stuttering.
     ffmpeg = subprocess.Popen(
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,  # stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL, universal_newlines=True,
         pass_fds=(pipe_in,),
         args=[
@@ -106,10 +106,13 @@ def get_segment(fileuri: str, index: int):
             '-accurate_seek', '-ss', str(index * 6),
             '-i', fileuri,
             '-map', '0:0', '-map', '0:1',
-            '-codec:a', 'libmp3lame', '-codec:v', 'libx264',
+            # FIXME: Chromecast doesn't support more than 2 channels with AAC codec,
+            #        but I'm struggling to make other codecs work at all.
+            '-codec:a', 'aac', '-ac', '2',
+            '-codec:v', 'libx264',
             '-force_key_frames', 'expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3))',
             '-copyts', '-vsync', '-1', '-f', 'segment', '-avoid_negative_ts', 'disabled',
-            '-start_at_zero', '-segment_time', '10', '-segment_time_delta', '-{}'.format(index * 6),
+            '-start_at_zero', '-segment_time', '6', '-segment_time_delta', '-{}'.format(index * 6),
             '-individual_header_trailer', '0', '-break_non_keyframes', '1',
             '-segment_format', 'mpegts', '-segment_list_type', 'flat',
             # NOTE: The segment_start_number needs to be the FD number, it doesn't actually affect the contents of the segment,
