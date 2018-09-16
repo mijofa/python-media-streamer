@@ -4,127 +4,37 @@
         <!-- FIXME: Host this locally? -->
         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script>
-        <style type="text/css">
-            video {
-                /* Fill the window, use black-borders */
-                position: fixed;
-                width: 100%;
-                height: 100%;
-
-                top: 0;
-                bottom: 0;
-                left: 0;
-                right: 0;
-
-                background: black;
-            }
-        </style>
+        <link rel="stylesheet" type="text/css" href="/static/player.css">
+        <script type="text/javascript" src="/static/player.js"></script>
     </head>
     <body>
-        <video id="video" controls autoplay />
-
-        <!-- Chrome/etc doesn't actually support HLS out of the box, so lets fix that.
-             This is just the Getting Started example from the hls.js documentation -->
-        <script>
-           var video = document.getElementById('video');
-           if(Hls.isSupported()) {
-               var hls = new Hls();
-               hls.loadSource(document.URL+'/manifest.m3u8');
-               hls.attachMedia(video);
-               hls.on(Hls.Events.MANIFEST_PARSED,function() {
-                   video.play();
-               });
-           }
-           // hls.js is not supported on platforms that do not have Media Source Extensions (MSE) enabled.
-           // When the browser has built-in HLS support (check using `canPlayType`), we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video element throught the `src` property.
-           // This is using the built-in support of the plain video element, without using hls.js.
-           // Note: it would be more normal to wait on the 'canplay' event below however on Safari (where you are most likely to find built-in HLS support) the video.src URL must be on the user-driven
-           // white-list before a 'canplay' event will be emitted; the last video event that can be reliably listened-for when the URL is not on the white-list is 'loadedmetadata'.
-           else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-               video.src = document.URL+'/manifest.m3u8';
-               video.addEventListener('loadedmetadata',function() {
-                   video.play();
-               });
-           }
-        </script>
-
-        <!-- Chromecast integration
-            This is haphazardly thrown together from Google's Geting started documentation -->
-        <script>
-// This depends on a thing in the flask app that responds to requests for "/get_ip" with the server's IP address.
-// This is only needed because Chromecast is fucking stupid with DNS and refuses to use any network internal DNS servers.
-var req = new XMLHttpRequest();
-req.open("GET", "/get_ip", true);
-req.onload = function(e) { server_ip = req.responseText }
-req.send()
-
-
-window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
-  if (loaded) {
-    initializeCastApi();
-  } else {
-    console.log(errorInfo);
-  }
-}
-
-initializeCastApi = function() {
-  var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
-  var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
-    sessionListener,
-    receiverListener);
-  chrome.cast.initialize(apiConfig, onInitSuccess, onError);
-};
-
-function onInitSuccess() {console.log("Casting initialised")}
-function onError(error) {console.log("ERROR!");console.log(error)}
-
-function receiverListener(e) {
-  if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
-    console.log("Chromecast listeners are available")
-  }
-}
-
-function onRequestSessionSuccess(e) {
-    console.log("Got session");
-    session = e;
-}
-
-// My own convenience functions
-function init_cast() {
-    chrome.cast.requestSession(onRequestSessionSuccess, onError);
-}
-currentMediaURL = document.URL+'/manifest.m3u8';
-function set_media() {
-	var mediaInfo = new chrome.cast.media.MediaInfo(currentMediaURL, 'application/x-mpegURL');
-	var request = new chrome.cast.media.LoadRequest(mediaInfo);
-	session.loadMedia(request,
-	   onMediaDiscovered.bind(this, 'loadMedia'),
-	   onError);
-	
-	function onMediaDiscovered(how, media) {
-	   currentMedia = media;
-	}
-}
-
-function onMediaDiscovered(how, media) {
-  media.addUpdateListener(onMediaStatusUpdate);
-}
-
-function sessionListener(e) {
-  session = e;
-  if (session.media.length != 0) {
-    onMediaDiscovered('onRequestSessionSuccess', session.media[0]);
-  }
-}
-
-// if (session.status !== chrome.cast.SessionStatus.CONNECTED) {
-//     console.log('SessionListener: Session disconnected');
-//     // Update local player to disconnected state
-// }
-
-function stopApp() {
-  session.stop(onSuccess, onError);
-}
-        </script>
+        <div id="video-container">
+            <video id="video-player" preload="metadata" autoplay>
+                If you're reading this, your browser does not support HTML5 video tags. Sorry
+            </video>
+            <table id="video-controls"><tbody>
+            <tr>
+                <!-- FIXME: Add output tags or some basic hover popups to indicate the new range values -->
+                <td><button type="button" id="play-pause">&#x21BA;</button></td>
+                <td><button type="button" id="mute">Mute</button></td>
+                <!-- orient="vertical" only actually has an affect in Firefox, but I'm going to use it in my CSS to simplify cross-browser compatibility. -->
+                <td><input class="vexpand-onhover" orient="vertical" type="range" id="volume-bar" min="0" max="100" step="1" value="75"></td>
+                <td id="position-current"></td>
+                <td width="100%"></td>
+                <td id="position-end"></td>
+                <td class="toggle-onhover">
+                    <input class="default-hidden" orient="vertical" type="range" id="brightness-bar" min="0" max="200" step="10" value="100">
+                    <span   class="default-shown">&#x2600;</span>
+                </td>
+                <td><button type="button" id="full-screen">Fullscreen</button></td>
+            </tr>
+            <tr>
+                <td id="seek-container">
+                    <input type="range" id="seek-bar" value=0>
+                    <canvas id="seekable-canvas"></canvas>
+                    <canvas id="buffered-canvas"></canvas>
+                </td>
+            </tr>
+            </tbody></table>
     </body>
 </html>

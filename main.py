@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 import sys
-import os.path
+import os
 
 import flask
 
 import ffmpeg
 
-app = flask.Flask("python-media-streamer")
+app = flask.Flask("web-emcee")
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
@@ -28,15 +28,37 @@ def index():
 
 @app.route('/watch/<path:filename>')
 def watch(filename):
-    return flask.send_file(os.path.join('static', 'player.html'), mimetype='text/html')
+    return flask.send_from_directory('static', 'player.html', mimetype='text/html')
 
 
-@app.route('/watch/<path:filename>/manifest.m3u8')
+@app.route('/watch/<path:filename>/hls-manifest.m3u8')
 def manifest(filename):
     fileuri = get_mediauri(filename)
 
-    duration = ffmpeg.probe(fileuri)['container']['duration']
-    return flask.Response(ffmpeg.generate_manifest(duration), mimetype='application/x-mpegURL')
+    resp = flask.make_response(ffmpeg.get_manifest(fileuri))
+    resp.cache_control.no_cache = True
+    return resp
+
+
+@app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
+def hls_segment(filename, index):
+    fileuri = get_mediauri(filename)
+
+    return flask.Response(ffmpeg.get_segment(fileuri, index),
+                          mimetype='video/mp2t')
+
+
+@app.route('/watch/<path:filename>/duration')
+def duration(filename):
+    fileuri = get_mediauri(filename)
+
+    # Flask can't handle a float here, so must cast it to a str.
+    return str(ffmpeg.get_duration(fileuri))
+
+
+@app.route('/raw_media/<path:filename>')
+def raw_media(filename):
+    return flask.send_from_directory(media_path, filename)
 
 
 # Chromecast requires CORS headers for all media resources, I don't yet understand CORS headers.
@@ -47,23 +69,6 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 app.after_request(add_cors_headers)  # noqa: E305
-
-
-@app.route('/raw_media/<path:filename>')
-def raw_media(filename):
-    return flask.send_from_directory(media_path, filename)
-
-
-@app.route('/watch/<path:filename>/hls-segment.ts')
-def hls_segment(filename):
-    fileuri = get_mediauri(filename)
-
-    # FIXME: Assert that there's no more than one of each argument
-    return flask.Response(ffmpeg.get_segment(fileuri=fileuri,
-                                             index=int(flask.request.args['index']),
-                                             offset=float(flask.request.args['offset']),
-                                             length=float(flask.request.args['length'])),
-                          mimetype='video/mp2t')
 
 
 # Chromecast refuses to use the DNS server specified by DHCP without messing with the firewall rules to block Google's DNS.

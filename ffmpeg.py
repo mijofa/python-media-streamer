@@ -1,15 +1,9 @@
 #!/usr/bin/python3
-import fcntl
 import json
 import math
 import operator
 import os
-import signal
 import subprocess
-import sys
-
-# Emby's ffmpeg invocation when watching a movie from Chrome Desktop on Debian:
-#      /opt/emby-server/bin/ffmpeg -f matroska,webm -i file:/srv/media/Video/TV/Stitchers/S03E02.mkv -threads 0 -map 0:0 -map 0:1 -map -0:s -codec:v:0 libx264 -vf scale=trunc(min(max(iw\,ih*dar)\,1920)/2)*2:trunc(ow/dar/2)*2 -pix_fmt yuv420p -preset veryfast -crf 23 -maxrate 4148908 -bufsize 8297816 -profile:v high -level 4.1 -x264opts:0 subme=0:me_range=4:rc_lookahead=10:me=dia:no_chroma_me:8x8dct=0:partitions=none -force_key_frames expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3)) -copyts -vsync -1 -codec:a:0 copy -f segment -max_delay 5000000 -avoid_negative_ts disabled -map_metadata -1 -map_chapters -1 -start_at_zero -segment_time 3 -individual_header_trailer 0 -segment_format mpegts -segment_list_type m3u8 -segment_start_number 0 -segment_list /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b.m3u8 -y /var/lib/emby/transcoding-temp/f435d247a8462ffd19925d38e555451b%d.ts  # noqa: E501
 
 ### FIXME: These are mostly just assumed by grepping ffprobe -formats & -codecs for each of the things mentioned at
 ###        https://developers.google.com/cast/docs/media
@@ -60,117 +54,99 @@ def probe(fileuri: str):
     print(v_streams, a_streams)
     return {'container': container_info, 'video': v_streams, 'audio': a_streams}
 
-# def find_keyframes(fileuri: str, video_stream_id: int = 0):
-#     """Find timestamps for all keyframes in the selected video stream"""
-#     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,universal_newlines=True,check=True,args=[
-#         'ffprobe','-loglevel','error', '-nostdin',
-#         # We want to know where all the keyframes are, but we don't care about any of the other frame timestamps
-#         '-skip_frame','nokey',
-#         '-show_entries','frame=best_effort_timestamp_time',
-#         '-print_format','compact=nokey=1:print_section=0',
-#         '-select_streams','v:{}'.format(video_stream_id),
-#         '-i',fileuri])
-#     assert ffprobe.returncode == 0  # check=True should've already taken care of this.
-#     keyframes = ffprobe.stdout.split('\n')
-#     # FIXME: Should we cast all lines into floats?
-#     # FIXME: Is it safe to assume it's already sorted?
-#     return keyframes
+
+def get_duration(fileuri: str):
+    # FIXME: Can ffmpeg just tell us the duration as it starts up?
+    # FIXME: Add a reasonable timeout. What's reasonable?
+    # FIXME: Technically each track within the media file can have a different duration.
+    ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
+        'ffprobe', '-loglevel', 'error',
+        '-show_entries', 'format=duration',
+        '-print_format', 'json=compact=1',
+        '-i', fileuri])
+    assert ffprobe.returncode == 0  # check=True should've already taken care of this.
+    probed_info = json.loads(ffprobe.stdout)
+    assert "format" in probed_info
+    assert "duration" in probed_info["format"]
+    assert len(probed_info.keys()) == 1
+    assert len(probed_info["format"].keys()) == 1
+    return float(probed_info["format"]["duration"])
 
 
-def generate_manifest(duration: float, segment_length: float = 10):
-    # FIXME: I'm using Flask, Flask has a templating engine, use that?
-    segment_count = math.ceil(duration / segment_length)
+def get_manifest(fileuri: str):
+    duration = get_duration(fileuri)
+    segment_count = math.ceil(duration / 6)
     m3u = ["#EXTM3U",
            "#EXT-X-VERSION:3",
            "#EXT-X-MEDIA-SEQUENCE:0",
            "#EXT-X-PLAYLIST-TYPE:VOD",
-           "#EXT-X-ALLOW-CACHE:YES",
+           "#EXT-X-ALLOW-CACHE:NO",  # FIXME: Allow caching after some testing has been done
            # "#EXT-X-START:"  # Probably wanna use this to set a save point
-           # Target duration *MUST* be at least the length of the longest segment, safer to go slightly higher.
-           "#EXT-X-TARGETDURATION:{}".format(segment_length + 1),
-           ] + ["#EXTINF:{segment_duration:0.6f},\n"
-                "hls-segment.ts?index={index}&offset={offset:0.6f}&length={segment_duration:0.6f}".format(
-                    segment_duration=segment_length, index=segment_index,
-                    offset=0 if segment_index == 0 else  # First segment
-                    duration - (segment_length * (segment_index)) if segment_index == segment_count - 1 else  # Last segment  # noqa: E131,E501
-                           segment_length * segment_index)  # All other segments
-                               for segment_index in range(0, segment_count)] + [
-           "#EXT-X-ENDLIST"]
+           "#EXT-X-TARGETDURATION:6",
+           ] + ["#EXTINF:6.000000,\n"
+                "hls-segment-{index}.ts".format(index=segment_index)
+                for segment_index in range(0, segment_count)
+                ] + ["#EXT-X-ENDLIST"]
     return '\n'.join(m3u)
 
 
-def get_segment(fileuri: str, offset: float, length: float, index: int):
-    # Not setting universal_newlines=True because I want the binary output here
-    # Not using run() because I want to get the output before the command finishes,
-    # annoyingly that means I don't get check=True and have to sort out my own returncode handling.
-    ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, args=[
-        'ffmpeg', '-loglevel', 'error', '-nostdin',
-        # Seek to the offset, and only play for the length
-        '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
-        '-i', fileuri,  # Everything after this only applies to the output
-        # Set the output's timestamp, otherwise the browser thinks it's already played this part
-        '-output_ts_offset', '{:0.6f}'.format(offset),
-        # Chromecast with acodec mp3 fails completely
-        # Chromecast with acodec aac works for less than 1 second (not an entire segment) and then just stops
-        #
-        # Is the problem actually the filename? It fails as soon as the 2nd segment starts to download,
-        # perhaps the Chromecast isn't liking that both segments have the same filename regardless of the query strings.
-        # FIXME: Try Chromecast again with the index included in the filename not just the query string.
-        #        Requires updating generate_manifest() above and main.py:manifest()
-        # Nope, not the filename. Not the audio stream either. Nor the bitrate
-        '-acodec', 'aac', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
-        # FIXME: Do I need to force a key frame? Should I even bother?
-        '-f', 'mpegts', '-force_key_frames', '0', 'pipe:1'])
-    # Set stdout to be non-blocking so that I don't have to read it all at once.
-    # FIXME: Is there a more pythonic way to do this?
-    fcntl.fcntl(ffmpeg.stdout, fcntl.F_SETFL,
-                fcntl.fcntl(ffmpeg.stdout, fcntl.F_GETFL) | os.O_NONBLOCK)  # Get current flags, and add O_NONBLOCK
+def get_segment(fileuri: str, index: int):
+    (pipe_out, pipe_in) = os.pipe2(os.O_NONBLOCK)
+
+    # FIXME: This will *always* report a non-zero exit status.
+    # FIXME: Do some actually error reporting.
+    # NOTE: I'm creating 10 second segments, but then treating them as 6 second segments.
+    #       This means there's 3 seconds overlap across each segment, but it helps avoid stuttering.
+    ffmpeg = subprocess.Popen(
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, universal_newlines=True,
+        pass_fds=(pipe_in,),
+        args=[
+            'ffmpeg', '-loglevel', 'error',
+            '-accurate_seek', '-ss', str(index * 6),
+            '-i', fileuri,
+            '-map', '0:0', '-map', '0:1',
+            '-codec:a', 'libmp3lame', '-codec:v', 'libx264',
+            '-force_key_frames', 'expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3))',
+            '-copyts', '-vsync', '-1', '-f', 'segment', '-avoid_negative_ts', 'disabled',
+            '-start_at_zero', '-segment_time', '10', '-segment_time_delta', '-{}'.format(index * 6),
+            '-individual_header_trailer', '0', '-break_non_keyframes', '1',
+            '-segment_format', 'mpegts', '-segment_list_type', 'flat',
+            # NOTE: The segment_start_number needs to be the FD number, it doesn't actually affect the contents of the segment,
+            #       just filename of the first segment, so "pipe:%d" will match the FD it should go out on.
+            '-segment_list', 'pipe:1', '-segment_start_number', str(pipe_in), 'pipe:%d',
+        ])
+
     try:
-        # ffmpeg.stdout never closes, that's weird.
-        while ffmpeg.poll() is None:
-            data = ffmpeg.stdout.read()
-            if data is None:
-                # There's no data ready to read
-                pass
-            elif not data:
-                # Command has ended, I'd expect stdout to be closed here, but that's not how subprocess works apparently
-                # FIXME: Is is possible to get this when there's still more valid data to come?
-                print("finished segment")
-                break
-            else:
-                yield data
+        while True:
+            try:
+                data = os.read(pipe_out, 1024)
+            except BlockingIOError:
+                if ffmpeg.poll() is None:
+                    # ffmpeg's still running, there's just no data waiting for us
+                    continue
+                else:
+                    # Ffmpeg's finished, and not closed the fd properly.
+                    # This is actually expected, the fd never gets closed properly.
+                    break
+
+            yield data
     except GeneratorExit as e:
-        print("Segment cancelled")
-        # ffmpeg doesn't die unless we read out all its data, or kill it.
-        # When the HTTP request stops, the generator stops being iterated over,
-        # so we've stopped reading the data and need to kill it instead.
-        #
-        # Why doesn't ffmpeg acknowledge a SIGTERM?
-        # Ok, it acknowledges SIGINT so we'll go with that.
-        ffmpeg.send_signal(signal.SIGINT)
-
-        # If that didn't work, SIGKILL it
-        try: ffmpeg.wait(timeout=4)                      # noqa: E701
-        except subprocess.TimeoutExpired: ffmpeg.kill()  # noqa: E701
-
-        # Leave a note that it was killed here so the finally block can ignore a bad exit status
-        ffmpeg.been_killed = True
+        # FIXME: Do this cleaner, ffmpeg only actually cleanly shuts down from a SIGINT
+        ffmpeg.kill()
+        ffmpeg.terminate()
     finally:
-        # ffmpeg closes stdout before finishing its own cleanup & exit.
-        # Need to wait for it to exit in order to actually handle the return code properly.
-        # Although if it was intentionally killed earlier, we don't care that it's an unclean death
-        #
-        # If it's still not dead yet then there will be a TimeoutExpired exception, which we can handle separately.
-        if ffmpeg.wait(timeout=1) != 0 and not ffmpeg.__dict__.get('been_killed', False):
-            # I know there's subprocess.run().check_returncode() but Popen doesn't have similar, so I gotta do it myself.
-            #
-            # I'm only defining this variable instead of putting it all on the raise line so that the backtrace looks nicer
-            err = ffmpeg.stderr.read().decode()
-            print(err, file=sys.stderr, flush=True)
-            FfmpegError = subprocess.CalledProcessError(
-                returncode=ffmpeg.returncode,
-                cmd=ffmpeg.args,
-                # output=ffmpeg.stdout.read(),  # I've already captured the stdout, so this is useless.
-                stderr=err,
-            )
-            raise FfmpegError
+        os.close(pipe_in)
+        os.close(pipe_out)
+
+    #        'ffmpeg', '-loglevel', 'error', '-nostdin',
+    #        '-i', fileuri,  # Everything after this only applies to the output
+    #        '-acodec', 'libmp3lame', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
+    #        '-f', 'hls', '-hls_playlist_type', 'vod',
+    #        '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
+    #        # FIXME: Did ffmpeg remove the temp_file flag?
+    #        # # With Emby I was seeing instances of what looked like the browser caching ahead of what the server had transcoded
+    #        # # I suspect that's because Emby wasn't using this temp_file flag, but I've not been able to confirm that in any way.
+    #        # '-hls_flags', 'temp_file',
+    #        # FIXME: Add the single_file flag?
+    #        'hls-manifest.m3u8'])

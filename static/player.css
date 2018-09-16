@@ -1,0 +1,92 @@
+:root {
+    --accent-colour: red;
+}
+
+
+#video-container, video {
+    /* Fill the window, use black-borders */
+    position: fixed;
+    width: 100% ; height: 100%;
+    top: 0 ; bottom: 0 ; left: 0 ; right:0;
+    z-index: 0;
+    background: black ; color: white;
+}
+#video-controls {
+    position: fixed;
+    /* NOTE: bottom must be set to at least the top of #seek-container, */
+    /*       so make sure it matches #seek-container's height, margin, etc */
+    bottom: 3%;
+
+    width: 100%;
+    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
+
+    z-index: 10;
+
+    transition: opacity 0.5s ease-in-out;
+}
+#seek-container * {
+    position: fixed;
+    bottom: 0.5%; height: 2%;
+    width: 99%;  /* Leaves a margin of 1% */
+    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
+}
+#seek-bar {
+    /* Make sure the range element is above the buffered canvas */
+    z-index: 20
+}
+
+/* Make sure all the controls are on the bottom, and that the controls are somewhat more readable */
+#video-controls * {
+    min-width: 1em;
+    font-size: x-large;
+    vertical-align: bottom;
+}
+
+#seekable-canvas {
+    filter: opacity(50%);
+    color: var(--accent-colour);
+    z-index: 11;
+}
+#buffered-canvas {
+    color: var(--accent-colour);
+    z-index: 12;
+}
+
+/* Firefox sets the slider orientation with a HTML property, make that same property work in Webkit and (untested) IE.
+ * FIXME: Just use "transform: rotate(270deg);"?
+ */
+input[type=range][orient=vertical] {
+    width: 1em;
+    writing-mode: bt-lr; /* IE */
+    -webkit-appearance: slider-vertical; /* WebKit, Chrome/etc */
+}
+
+.vexpand-onhover {
+    height: 1.5em;
+}
+.vexpand-onhover:hover {
+    height: unset;
+}
+
+.toggle-onhover > .default-hidden     {display: none}
+.toggle-onhover:hover        .default-hidden,
+.toggle-onhover:focus-within .default-hidden {
+    display: unset
+}
+.toggle-onhover:hover        .default-shown,
+.toggle-onhover:focus-within .default-shown {
+    display: none
+}
+
+/*  */
+button:active, button.active-button {
+    border-style: inset;
+    padding: 1px 6px;
+}
+
+
+.hidden {
+    opacity: 0;
+}
+body.hide-mouse {cursor:none}
+
