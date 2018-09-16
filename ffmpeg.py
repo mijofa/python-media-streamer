@@ -26,9 +26,7 @@ def probe(fileuri: str):
     # FIXME: Add a reasonable timeout. What's reasonable?
     ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
         'ffprobe', '-loglevel', 'error',
-        '-show_entries', 'stream=index,codec_name,codec_type,channels,r_frame_rate,sample_rate:'
-                         'stream_tags:'
-                         'format=format_name,duration',
+        '-show_entries', 'stream=index,codec_name,codec_type,channels,r_frame_rate:stream_tags:format=format_name,duration',
         '-print_format', 'json=compact=1',
         '-i', fileuri])
     assert ffprobe.returncode == 0  # check=True should've already taken care of this.
@@ -56,13 +54,10 @@ def probe(fileuri: str):
                               'channels': stream['channels'],
                               # There might be no language tag, or there might be no tags at all
                               # FIXME: Should I just put the entire 'tags' section here?
-                              'language': stream.get('tags', {}).get('language', ''),
-                              'sample_rate': int(stream['sample_rate']),
-                              })
+                              'language': stream.get('tags', {}).get('language', '')})
         else:
             raise NotImplementedError("Streams of type {} are not supported".format(stream['codec_type']))
-    if len(v_streams) > 1 or len(a_streams) > 1:
-        raise NotImplementedError("Only 1 audio stream and 1 video stream are supported")
+    print(v_streams, a_streams)
     return {'container': container_info, 'video': v_streams, 'audio': a_streams}
 
 # def find_keyframes(fileuri: str, video_stream_id: int = 0):
@@ -82,13 +77,8 @@ def probe(fileuri: str):
 #     return keyframes
 
 
-def generate_manifest(fileuri: str, segment_length: float = 10):
+def generate_manifest(duration: float, segment_length: float = 10):
     # FIXME: I'm using Flask, Flask has a templating engine, use that?
-    file_info = probe(fileuri)
-    sps = file_info['audio'][0]['sample_rate']
-    fps = file_info['video'][0]['fps']
-    print('{:.6f}, {:.6f}'.format(fps, sps))
-    duration = file_info['container']['duration']
     segment_count = math.ceil(duration / segment_length)
     m3u = ["#EXTM3U",
            "#EXT-X-VERSION:3",
@@ -116,18 +106,10 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
     ffmpeg = subprocess.Popen(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, args=[
         'ffmpeg', '-loglevel', 'error', '-nostdin',
         # Seek to the offset, and only play for the length
-        '-accurate_seek',
-#        '-ss', '{:0.6f}'.format(offset),
-        '-copyts', '-start_at_zero',
+        '-ss', '{:0.6f}'.format(offset), '-t', '{:0.6f}'.format(length),
         '-i', fileuri,  # Everything after this only applies to the output
-        '-mpegts_copyts', '1',
-        '-vf', 'select=gte(n\,{:d})'.format(230),
-#        '-timecode_frame_start', '{:0.6f}'.format(offset),
-        '-frames', '230',
-#        '-t', '{:0.6f}'.format(length),
         # Set the output's timestamp, otherwise the browser thinks it's already played this part
-        '-shortest',
-#        '-output_ts_offset', '{:0.6f}'.format(offset),
+        '-output_ts_offset', '{:0.6f}'.format(offset),
         # Chromecast with acodec mp3 fails completely
         # Chromecast with acodec aac works for less than 1 second (not an entire segment) and then just stops
         #
@@ -139,7 +121,6 @@ def get_segment(fileuri: str, offset: float, length: float, index: int):
         '-acodec', 'aac', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
         # FIXME: Do I need to force a key frame? Should I even bother?
         '-f', 'mpegts', '-force_key_frames', '0', 'pipe:1'])
-    print(*ffmpeg.args)
     # Set stdout to be non-blocking so that I don't have to read it all at once.
     # FIXME: Is there a more pythonic way to do this?
     fcntl.fcntl(ffmpeg.stdout, fcntl.F_SETFL,

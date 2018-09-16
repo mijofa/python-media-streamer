@@ -35,7 +35,8 @@ def watch(filename):
 def manifest(filename):
     fileuri = get_mediauri(filename)
 
-    return flask.Response(ffmpeg.generate_manifest(fileuri), mimetype='application/x-mpegURL')
+    duration = ffmpeg.probe(fileuri)['container']['duration']
+    return flask.Response(ffmpeg.generate_manifest(duration), mimetype='application/x-mpegURL')
 
 
 # Chromecast requires CORS headers for all media resources, I don't yet understand CORS headers.
