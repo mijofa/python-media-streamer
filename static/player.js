@@ -321,9 +321,16 @@ function setup_casting() {
      */
     // This depends on a thing in the flask app that responds to requests for "/get_ip" with the server's IP address.
     // This is only needed because Chromecast is fucking stupid with DNS and refuses to use any network internal DNS servers.
+    var castingMediaURL
+
     var req = new XMLHttpRequest();
     req.open("GET", "/get_ip", true);
-    req.onload = function(e) { server_ip = req.responseText }
+    req.onload = function(e) {
+        var a = document.createElement('a');
+        a.href = document.URL+'/hls-manifest.m3u8';
+        a.hostname = req.responseText;
+        castingMediaURL = a.href;
+    }
     req.send()
     
     
@@ -344,7 +351,7 @@ function setup_casting() {
     };
     
     function onInitSuccess() {console.log("Casting initialised")}
-    function onError(error) {console.log("ERROR!");console.log(error)}
+    function onError(error) {console.error(error)}
     
     function receiverListener(e) {
       if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
@@ -358,12 +365,8 @@ function setup_casting() {
     }
     
     // My own convenience functions
-    function init_cast() {
-        chrome.cast.requestSession(onRequestSessionSuccess, onError);
-    }
-    currentMediaURL = document.URL+'/hls-manifest.m3u8';
-    function set_media() {
-    	var mediaInfo = new chrome.cast.media.MediaInfo(currentMediaURL, 'application/x-mpegURL');
+    set_media = function() {
+    	var mediaInfo = new chrome.cast.media.MediaInfo(castingMediaURL, 'application/x-mpegURL');
     	var request = new chrome.cast.media.LoadRequest(mediaInfo);
     	session.loadMedia(request,
     	   onMediaDiscovered.bind(this, 'loadMedia'),
@@ -372,6 +375,10 @@ function setup_casting() {
     	function onMediaDiscovered(how, media) {
     	   currentMedia = media;
     	}
+        console.log("Media set")
+    }
+    init_cast = function() {
+        chrome.cast.requestSession(onRequestSessionSuccess, onError);
     }
     
     function onMediaDiscovered(how, media) {
@@ -395,6 +402,8 @@ function setup_casting() {
     }
 }
 
+var init_cast;
+var set_media;
 window.onload = function() {
     video_player = document.getElementById("video-player");
 
@@ -402,6 +411,6 @@ window.onload = function() {
     
     init_hls();
     
-    // // NotYetImplemented
-    // setup_casting()
+    // NotYetImplemented
+    setup_casting()
 }
