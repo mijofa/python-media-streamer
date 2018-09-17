@@ -75,15 +75,16 @@ def get_duration(fileuri: str):
 
 def get_manifest(fileuri: str):
     duration = get_duration(fileuri)
-    segment_count = math.ceil(duration / 6)
+    segment_count = math.ceil(duration / 3)
     m3u = ["#EXTM3U",
-           "#EXT-X-VERSION:3",
-           "#EXT-X-MEDIA-SEQUENCE:0",
+           "#EXT-X-INDEPENDENT-SEGMENTS",
            "#EXT-X-PLAYLIST-TYPE:VOD",
+           "#EXT-X-VERSION:3",
+           "#EXT-X-TARGETDURATION:3",
+           "#EXT-X-MEDIA-SEQUENCE:0",
            "#EXT-X-ALLOW-CACHE:NO",  # FIXME: Allow caching after some testing has been done
            # "#EXT-X-START:"  # Probably wanna use this to set a save point
-           "#EXT-X-TARGETDURATION:6",
-           ] + ["#EXTINF:6.000000,\n"
+           ] + ["#EXTINF:3.000000, nodesc\n"
                 "hls-segment-{index}.ts".format(index=segment_index)
                 for segment_index in range(0, segment_count)
                 ] + ["#EXT-X-ENDLIST"]
@@ -93,27 +94,48 @@ def get_manifest(fileuri: str):
 def get_segment(fileuri: str, index: int):
     (pipe_out, pipe_in) = os.pipe2(os.O_NONBLOCK)
 
-    # FIXME: This will *always* report a non-zero exit status.
-    # FIXME: Do some actually error reporting.
-    # NOTE: I'm creating 10 second segments, but then treating them as 6 second segments.
-    #       This means there's 3 seconds overlap across each segment, but it helps avoid stuttering.
+    ## CHROMECAST QUIRKS
+    ## These are all the undocumented quirks with Chromecast's HLS implementation that work fine in Chrome on the desktop,
+    ## but I still need to work around to get any casting working.
+    ##
+    ## * Chromecast just completely gives up on the stream if there's any overlap across segments.
+    ##   This means I can't (for example) create 10 second segments but only play the first 6 seconds.
+    ## * Chromecast gets *really* buggy if there's any gaps between segments, it's more than just a hiccup at each segment,
+    ##   but completely unwatchable with constant pauses which last longer than the gap itself does.
+    #
+    # FIXME: This will *always* report a non-zero exit status because I'm trying to create more than 1 segment,
+    #        but only opening 1 output pipe for them.
+    # FIXME: Do some actual error reporting.
     ffmpeg = subprocess.Popen(
         stdout=subprocess.DEVNULL,  # stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL, universal_newlines=True,
         pass_fds=(pipe_in,),
         args=[
             'ffmpeg', '-loglevel', 'error',
-            '-accurate_seek', '-ss', str(index * 6),
+            # If it's the first index, don't seek at all because seeking to 0 is NOT the same as starting at the beginning.
+            # This is doe to some weirdness with certain files that can actually have a start time > 0 and so on.
+            ] + (['-accurate_seek', '-ss', str(index * 3)] if index != 0 else []) + [  # noqa: E123
+            '-t', '3',
             '-i', fileuri,
             '-map', '0:0', '-map', '0:1',
             # FIXME: Chromecast doesn't support more than 2 channels with AAC codec,
             #        but I'm struggling to make other codecs work at all.
-            '-codec:a', 'aac', '-ac', '2',
             '-codec:v', 'libx264',
+            '-vf', 'scale=trunc(min(max(iw\,ih*dar)\,1920)/2)*2:trunc(ow/dar/2)*2',
+            '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
+            '-maxrate', '4148908', '-bufsize', '8297816', '-profile:v', 'high', '-level', '4.1',
+            '-x264opts', 'subme=0:me_range=4:rc_lookahead=10:me=dia:no_chroma_me:8x8dct=0:partitions=none',
+
+            '-codec:a', 'libmp3lame', '-ac', '2', '-ab', '384000', '-af', 'volume=2',
+
+            '-muxdelay', '0', '-max_delay', '5000000',
+
+            # Force a keyframe every 3 seconds, this way there will always be one at the beginning of every 6 second chunk
             '-force_key_frames', 'expr:if(isnan(prev_forced_t),eq(t,t),gte(t,prev_forced_t+3))',
             '-copyts', '-vsync', '-1', '-f', 'segment', '-avoid_negative_ts', 'disabled',
-            '-start_at_zero', '-segment_time', '6', '-segment_time_delta', '-{}'.format(index * 6),
+            '-start_at_zero', '-segment_time', '3', '-segment_time_delta', '-{}'.format(index * 3),
             '-individual_header_trailer', '0', '-break_non_keyframes', '1',
+
             '-segment_format', 'mpegts', '-segment_list_type', 'flat',
             # NOTE: The segment_start_number needs to be the FD number, it doesn't actually affect the contents of the segment,
             #       just filename of the first segment, so "pipe:%d" will match the FD it should go out on.
