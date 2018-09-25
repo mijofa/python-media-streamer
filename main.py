@@ -36,6 +36,16 @@ def watch(filename):
     return flask.send_from_directory('static', 'player.html', mimetype='text/html')
 
 
+@app.route('/watch/<path:filename>/subtitles-<string:language>.vtt')
+@app.route('/watch/<path:filename>/subtitles.vtt', defaults={'language': 'English'})
+def subtitles(filename, language):
+    fileuri = get_mediauri(filename)
+
+    resp = flask.make_response(ffmpeg.get_subtitles(fileuri, language))
+    resp.mimetype = 'text/vtt'
+    return resp
+
+
 @app.route('/watch/<path:filename>/hls-manifest.m3u8')
 def manifest(filename):
     fileuri = get_mediauri(filename)

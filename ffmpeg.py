@@ -80,6 +80,20 @@ def get_duration(fileuri: str):
     return float(probed_info["format"]["duration"])
 
 
+def get_subtitles(fileuri: str, language: str):
+    # In all my testing, ffmpeg did this job really quick, but perhaps I should not assume that will be the case.
+    ffmpeg_output = subprocess.check_output(
+        stdin=subprocess.DEVNULL,
+        args=[
+            'ffmpeg', '-loglevel', 'error', '-nostdin',
+            '-i', fileuri,  # Everything after this only applies to the output
+            '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
+            '-map', '0:m:title:{}'.format(language),  # FIXME: is that the right way to determine the language?
+            'pipe:1'])
+
+    return ffmpeg_output
+
+
 def _wait_for_manifest(output_dir: str):
     # FIXME: I should probably at least put a time.sleep(0.1) here
     # FIXME: Wait for a couple of segments rather than just wait for the manifest.
@@ -102,7 +116,7 @@ def start_transcode(output_dir: str, fileuri: str):
         cwd=output_dir, args=[
             'ffmpeg', '-loglevel', 'error', '-nostdin',
             '-i', fileuri,  # Everything after this only applies to the output
-            '-acodec', 'libmp3lame', '-vcodec', 'libx264',  # FIXME: Copy the codec when it's already supported
+            '-codec:a', 'libmp3lame', '-codec:v', 'libx264',  # FIXME: Copy the codec when it's already supported
             '-f', 'hls', '-hls_playlist_type', 'vod',
             '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
             # FIXME: Did ffmpeg remove the temp_file flag?

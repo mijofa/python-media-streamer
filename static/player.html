@@ -6,6 +6,11 @@
         <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js"></script>
         <link rel="stylesheet" type="text/css" href="/static/player.css">
         <script type="text/javascript" src="/static/player.js"></script>
+        <style id="auto-subs-style">
+            /* I can't programmatically access psuedo classes from inside javascript, but I can programmatically update embedded stylesheets.
+             * This ugly workaround is so I can move the subtitles out from behind the video controls depending on whether they're visible or not.
+             */
+        </style>
     </head>
     <body>
         <div id="video-container">

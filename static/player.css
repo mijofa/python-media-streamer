@@ -90,3 +90,24 @@ button:active, button.active-button {
 }
 body.hide-mouse {cursor:none}
 
+
+
+/* Subtitles styling */
+ ::-webkit-media-text-track-container {
+    /* FIXME: This is very browser specific, but for some reason setting the padding on the ::cue element had no effect. */
+    /* padding-bottom: 3em; */ /* Actually, nah, this is ugly */
+    /* FIXME: Why the hell does this transition not even work right?!? */
+    transition: padding 0.5s steps(10);
+ }
+::cue {
+    font-size: xx-large;
+    opacity: 0.8;  /* Should be unnoticable, but still leave the video vaguely visible */
+    background: none;  /* Why the fuck does this even put the black bars there by default? It should at least be mostly opaque */
+/* FIXME: Make this shadow a configurable option, maybe.
+ *  text-shadow:
+ *      -1px -1px 0 var(--accent-colour),
+ *      1px  -1px 0 var(--accent-colour),
+ *      -1px 1px  0 var(--accent-colour),
+ *      1px  1px  0 var(--accent-colour);
+ */
+}

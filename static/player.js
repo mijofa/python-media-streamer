@@ -5,19 +5,29 @@ var video_player;
 var controls_timer = null;
 
 function controlsShow(duration = 0) {
-    document.getElementById("video-controls").classList.remove("hidden")
-    document.body.classList.remove("hide-mouse")
+    controls = document.getElementById("video-controls");
+    controls.classList.remove("hidden");
+    document.body.classList.remove("hide-mouse");
+
+    /* Move the subtitles up so the controls are not in the way */
+    document.getElementById("auto-subs-style").innerHTML = "::-webkit-media-text-track-container { padding-bottom: "+controls.offsetHeight+"px; }";
 
     if (controls_timer) {
         controls_timer = clearTimeout(controls_timer);
     }
     if (duration > 0) {
-        controls_timer = setTimeout(controlsHide, duration * 1000)
+        controls_timer = setTimeout(controlsHide, duration * 1000);
     }
 }
 function controlsHide() {
-    document.getElementById("video-controls").classList.add("hidden")
-    document.body.classList.add("hide-mouse")
+    controls = document.getElementById("video-controls");
+    controls.classList.add("hidden");
+    document.body.classList.add("hide-mouse");
+
+    /* Put the subtitles back where they belong */
+    document.getElementById("auto-subs-style").innerHTML = "";
+
+    /* Remove the hide timer in case it's been hidden manually before the timer expires*/
     if (controls_timer) {
         controls_timer = clearTimeout(controls_timer);
     }
@@ -287,6 +297,24 @@ function setup_controls() {
     window.addEventListener("keydown", process_keydown, false);
 }
 
+
+function add_subtitles() {
+    // FIXME: Implement a subtitle chooser for language selection/etc
+    vtt_track = document.createElement("track");
+    vtt_track.kind = "captions";  // FIXME: This is dynamic, don't hard-code it!
+    vtt_track.srclang = "eng";  // FIXME: This is dynamic, don't hard-code it!
+    vtt_track.language = "English";  // FIXME: This is dynamic, don't hard-code it!
+    vtt_track.src = document.URL+'/subtitles.vtt';
+    video_player.append(vtt_track);
+    vtt_track.addEventListener("load", _ => console.debug("Loaded subtitles"));
+    vtt_track.addEventListener("load", _ => this.mode = "showing");
+//    // FIXME: Internet said Firefox needs this too
+//    vtt_track.addEventListener("load", _ => video_player.textTracks[0].mode = "showing");
+    // FIXME: They don't actually trigger until the mode is set to 'showing',
+    vtt_track.mode = "showing";
+    // FIXME: That doesn't work either... Just go add UI buttons
+}
+
 function init_hls() {
     /* Chrome/etc doesn't actually support HLS out of the box, so lets fix that.
      * This is just the Getting Started example from the hls.js documentation
@@ -410,7 +438,9 @@ window.onload = function() {
     setup_controls();
     
     init_hls();
+
+    add_subtitles();
     
     // NotYetImplemented
-    setup_casting()
+    setup_casting();
 }
