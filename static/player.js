@@ -254,49 +254,58 @@ function setup_controls() {
     // I'm basing thse keybindings on YouTube's as documented at https://support.google.com/youtube/answer/7631406?hl=en
     // Directional arrow keys do not trigger the keypress event, so must use keydown
     function process_keydown(key_ev) {
-      // ARROWS
-      switch (key_ev.key) {
-        case "ArrowUp":
-          console.debug("Raising volume due to user keypress");
-          video_player.volume += 0.02
-          break;
-        case "ArrowDown":
-          console.debug("Lowering volume due to user keypress");
-          video_player.volume -= 0.02
-          break;
-        case "ArrowLeft":
-          console.debug("Jumping backward due to user keypress");
-          videoSeek(video_player.currentTime - 10);
-          break;
-        case "ArrowRight":
-          console.debug("Jumping forward due to user keypress");
-          videoSeek(video_player.currentTime + 25);
-          break;
-        case " ":
-          // Emby already pauses on space, but only if the OSD is hidden
-          // That's the stupidest UX I've ever heard of, but I still gotta work around that shit.
-          console.debug("Toggling pause due to user keypress");
-          videoPauseToggle();
-          // Normally space would press the currently selected button so we need to stop the default event handler from triggering,
-          // otherwise we might get doubling up on the pause button, or some other button getting pressed as well.
-          key_ev.preventDefault();
-          break;
-        case "f":
-          console.debug("Toggling fullscreen due to user keypress");
-          videoToggleFullscreen();
-          break;
-        case "m":
-          console.debug("Toggling mute due to user keypress");
-          videoMuteToggle();
-          break;
-        default:
-          console.debug("user pressed unconfigured key "+key_ev.code);
-          break;
-      }
+        // ARROWS
+        switch (key_ev.key) {
+            case "ArrowUp":
+                console.debug("Raising volume due to user keypress");
+                video_player.volume += 0.02
+                break;
+            case "ArrowDown":
+                console.debug("Lowering volume due to user keypress");
+                video_player.volume -= 0.02
+                break;
+            case "ArrowLeft":
+                console.debug("Jumping backward due to user keypress");
+                videoSeek(video_player.currentTime - 10);
+                break;
+            case "ArrowRight":
+                console.debug("Jumping forward due to user keypress");
+                videoSeek(video_player.currentTime + 25);
+                key_ev.preventDefault();
+                break;
+            case " ":
+                console.debug("Toggling pause due to user keypress");
+                videoPauseToggle();
+                break;
+            case "F11": // FIXME: Chrome's F11 triggered fullscreen is completely different and undetectable from the JS triggered fullscreen
+            case "f":
+                console.debug("Toggling fullscreen due to user keypress");
+                videoToggleFullscreen();
+                break;
+            case "m":
+                console.debug("Toggling mute due to user keypress");
+                videoMuteToggle();
+                break;
+            case "s":
+                console.debug("Toggling subtitles due to user keypress");
+                if (vtt_track.track.mode == "showing") {
+                    vtt_track.track.mode = "disabled"
+                } else {
+                    vtt_track.track.mode = "showing"
+                }
+                break;
+            default:
+                console.debug("user pressed unconfigured key "+key_ev.code);
+                return
+        }
+        // The 'default' case above will return out of this function if the event wasn't handled here,
+        // otherwise if we have handled the event, we want none of the default handlers to have an effect.
+        console.debug("Preventing default");
+        key_ev.preventDefault();
     }
-    window.addEventListener("mousemove", _ => controlsShow(3), false);
-    window.addEventListener("keydown",   _ => controlsShow(3), false);
-    window.addEventListener("keydown", process_keydown, false);
+    window.addEventListener("mousemove", _ => controlsShow(3));
+    window.addEventListener("keydown",   _ => controlsShow(3));
+    window.addEventListener("keydown", process_keydown);
 }
 
 
