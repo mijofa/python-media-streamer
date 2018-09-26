@@ -82,14 +82,16 @@ function _videoSeekBeyondDuration(time, unpause) {
             if (video_player.ondurationchange == null || video_player.ondurationchange == undefined) {
                 video_player.ondurationchange = function(ev) {
                     // FIXME: Wait, time and unpause shouldn't be set in this context... why does this work?
-                    //        I think I just 
+                    //        I think I just don't understand JS contexts
                     _videoSeekBeyondDuration(time, unpause)
                 };
             };
         } else {
             video_player.ondurationchange = undefined;
             // Duration has caught up, let's continue
-            if (unpause) {
+            // FIXME: Getting a lot of this error when seeking around quickly:
+            //        > Uncaught (in promise) DOMException: The play() request was interrupted by a call to pause(). https://goo.gl/LdLk22
+            if (unpause && video_player.paused) {
                 video_player.play()
             };
         }
