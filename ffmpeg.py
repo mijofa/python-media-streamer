@@ -88,7 +88,7 @@ def get_subtitles(fileuri: str, language: str):
             'ffmpeg', '-loglevel', 'error', '-nostdin',
             '-i', fileuri,  # Everything after this only applies to the output
             '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
-            '-map', '0:m:title:{}'.format(language),  # FIXME: is that the right way to determine the language?
+            '-map', 's:m:language:{}'.format(language),  # FIXME: is that the right way to determine the language?
             'pipe:1'])
 
     return ffmpeg_output
