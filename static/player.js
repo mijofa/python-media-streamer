@@ -10,7 +10,7 @@ function controlsShow(duration = 0) {
     document.body.classList.remove("hide-mouse");
 
     /* Move the subtitles up so the controls are not in the way */
-    document.getElementById("auto-subs-style").innerHTML = "::-webkit-media-text-track-container { padding-bottom: "+controls.offsetHeight+"px; }";
+    document.getElementById("auto-subs-style").innerHTML = "::-webkit-media-text-track-container { bottom: "+controls.offsetHeight+"px; }";
 
     if (controls_timer) {
         controls_timer = clearTimeout(controls_timer);

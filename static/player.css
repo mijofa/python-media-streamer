@@ -13,26 +13,12 @@
 }
 #video-controls {
     position: fixed;
-    /* NOTE: bottom must be set to at least the top of #seek-container, */
-    /*       so make sure it matches #seek-container's height, margin, etc */
-    bottom: 3%;
+    bottom: 0;
 
     width: 100%;
     left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 
     z-index: 10;
-
-    transition: opacity 0.5s ease-in-out;
-}
-#seek-container * {
-    position: fixed;
-    bottom: 0.5%; height: 2%;
-    width: 99%;  /* Leaves a margin of 1% */
-    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
-}
-#seek-bar {
-    /* Make sure the range element is above the buffered canvas */
-    z-index: 20
 }
 
 /* Make sure all the controls are on the bottom, and that the controls are somewhat more readable */
@@ -40,6 +26,28 @@
     min-width: 1em;
     font-size: x-large;
     vertical-align: bottom;
+}
+
+#seek-container {
+    position: relative;
+}
+
+#seek-container * {
+    width: 100%;
+    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
+}
+#seek-container input {
+    position: relative;
+    display: block;
+/*    bottom: 0.5%; height: 2%; */
+    /* Make sure the range element is above the buffered canvas */
+    z-index: 20
+}
+
+#seek-container canvas {
+    position: absolute;
+    top: 0;
+    height: 100%;
 }
 
 #seekable-canvas {
@@ -85,22 +93,29 @@ button:active, button.active-button {
 }
 
 
-.hidden {
-    opacity: 0;
+
+#video-controls {
+    transition: 
+        bottom 0.5s ease-in-out;
+}
+table.hidden {
+    bottom: -100% !important; 
 }
 body.hide-mouse {cursor:none}
 
 
 
 /* Subtitles styling */
- ::-webkit-media-text-track-container {
+::-webkit-media-text-track-container {
     /* FIXME: This is very browser specific, but for some reason setting the padding on the ::cue element had no effect. */
     /* padding-bottom: 3em; */ /* Actually, nah, this is ugly */
     /* FIXME: Why the hell does this transition not even work right?!? */
-    transition: padding 0.5s steps(10);
+    bottom: 0;
+    transition: bottom 0.25s steps(10);
  }
 ::cue {
-    font-size: xx-large;
+/* Chrome actually defaults to larger than xx-large... except it didn't when I first wrote this, weird. */
+/*    font-size: xx-large; */
     opacity: 0.8;  /* Should be unnoticable, but still leave the video vaguely visible */
     background: none;  /* Why the fuck does this even put the black bars there by default? It should at least be mostly opaque */
 /* FIXME: Make this shadow a configurable option, maybe.
