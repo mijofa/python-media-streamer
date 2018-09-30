@@ -157,6 +157,7 @@ function setup_controls() {
     // Update the mute button & volume slider on state change
     video_player.addEventListener("volumechange", function(ev) {
         volumeBar.value = ev.target.volume * volumeBar.max;
+        volumeBar.title = volumeBar.value + "%";
         if (ev.target.muted == false)
              {muteButton.classList.remove('active-button') }
         else {muteButton.classList.add('active-button')    }
@@ -234,7 +235,10 @@ function setup_controls() {
     //       https://developers.google.com/web/updates/2015/01/ES6-Template-Strings
     // FIXME: Make ViM understand that so that syntax-highlighting works better
     // FIXME: Don't completely overwrite all filters just to change the brightness one.
-    brightnessBar.addEventListener("input", ev => video_player.style.filter = `brightness(${ev.target.valueAsNumber}%)` );
+    brightnessBar.addEventListener("input", function(ev) {
+        ev.target.title = ev.target.value + "%";
+        video_player.style.filter = `brightness(${ev.target.valueAsNumber}%)`
+    });
     
     // Event listener for the full-screen button
     // FIXME: Is "click" the right event to use?
