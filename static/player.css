@@ -28,10 +28,12 @@ body {
     z-index: 10;  /* Stay above the video */
 }
 
-/* Make sure all the controls stay on the bottom, and that the text is somewhat more readable */
+/* Make sure all the controls stay on the bottom, */
+/* and that it's large enough to be somewhat more readable */
 #video-controls * {
     min-width: 1em;
-    font-size: x-large;
+    min-height: 1em;
+    font-size: xx-large;
     vertical-align: bottom;
 }
 
