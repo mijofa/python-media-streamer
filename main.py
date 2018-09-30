@@ -49,7 +49,7 @@ def subtitles(filename, language):
 @app.route('/watch/<path:filename>/hls-manifest.m3u8')
 def manifest(filename):
     fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
+    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))  # FIXME: foo/S01E02 and bar/S01E02 will conflict
 
     resp = flask.make_response(ffmpeg.get_manifest(output_dir, fileuri))
     resp.cache_control.no_cache = True
@@ -59,7 +59,7 @@ def manifest(filename):
 @app.route('/watch/<path:filename>/hls-segment-<int:index>.ts')
 def hls_segment(filename, index):
     fileuri = get_mediauri(filename)
-    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))
+    output_dir = os.path.join(TMP_DIR, os.path.basename(fileuri))  # FIXME: foo/S01E02 and bar/S01E02 will conflict
 
     return ffmpeg.get_segment(output_dir, index)
 
