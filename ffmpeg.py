@@ -81,17 +81,30 @@ def get_duration(fileuri: str):
 
 
 def get_subtitles(fileuri: str, language: str):
-    # In all my testing, ffmpeg did this job really quick, but perhaps I should not assume that will be the case.
-    ffmpeg_output = subprocess.check_output(
-        stdin=subprocess.DEVNULL,
-        args=[
-            'ffmpeg', '-loglevel', 'error', '-nostdin',
-            '-i', fileuri,  # Everything after this only applies to the output
-            '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
-            '-map', 's:m:language:{}'.format(language),  # FIXME: is that the right way to determine the language?
-            'pipe:1'])
+    # FIXME: In all my testing, ffmpeg did this job really quick,
+    #        but perhaps I should turn this into a generator so as to not assume that will be the case.
+    for fileuri in (fileuri, fileuri.rpartition(os.path.extsep)[0] + '.srt'):
+        print("Attempting to extract subtitles from", fileuri)
+        try:
+            vtt_result = subprocess.check_output(
+                stdin=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                args=[
+                    'ffmpeg', '-loglevel', 'error', '-nostdin',
+                    '-i', fileuri,  # Everything after this only applies to the output
+                    '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
+                    '-map', 's:m:language:{}'.format(language),  # FIXME: is that the right way to determine the language?
+                    'pipe:1'])
+        except subprocess.CalledProcessError as e:
+            if e.stderr.startswith(b'Stream map ') and b'matches no streams.' in e.stderr:
+                # b"Stream map 's:m:language:English' matches no streams.\nTo ignore this, add a trailing '?' to the map.\n"
+                continue
+            else:
+                # I don't know what this error is, but it's not what was expected
+                raise
+        else:
+            break
 
-    return ffmpeg_output
+    return vtt_result
 
 
 def _wait_for_manifest(output_dir: str):
