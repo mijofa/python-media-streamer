@@ -118,7 +118,7 @@ function videoSeek(time) {
     }
 }
 
-function videoToggleFullscreen() {
+function videoFullscreenToggle() {
     player = document.getElementById('video-container');
     if (document.webkitIsFullScreen) {
         document.webkitCancelFullScreen();
@@ -238,15 +238,15 @@ function setup_controls() {
     
     // Event listener for the full-screen button
     // FIXME: Is "click" the right event to use?
-    fullScreenButton.addEventListener("click", videoToggleFullscreen);
-    document.addEventListener('webkitfullscreenchange',function(ev) {
+    fullScreenButton.addEventListener("click", videoFullscreenToggle);
+    window.addEventListener('webkitfullscreenchange',function(ev) {
         if (document.webkitIsFullScreen) {
             fullScreenButton.classList.add('active-button');
         } else {
             fullScreenButton.classList.remove('active-button');
         }
     });
-    window.addEventListener("dblclick", videoToggleFullscreen, false);
+    window.addEventListener("dblclick", videoFullscreenToggle, false);
 
 
     // Keyboard shortcuts
@@ -265,22 +265,38 @@ function setup_controls() {
                 video_player.volume -= 0.02
                 break;
             case "ArrowLeft":
-                console.debug("Jumping backward due to user keypress");
+                console.debug("Seeking backward 10s due to user keypress");
                 videoSeek(video_player.currentTime - 10);
                 break;
             case "ArrowRight":
-                console.debug("Jumping forward due to user keypress");
+                console.debug("Seeking forward 25s due to user keypress");
                 videoSeek(video_player.currentTime + 25);
                 key_ev.preventDefault();
+                break;
+            case "Home":
+                console.debug("Seeking to the beginning due to user keypress");
+                videoSeek(0);
+                break;
+            case "End":
+                console.debug("Seeking to the end due to user keypress");
+                videoSeek(video_player.duration);
+                break;
+            case "PageDown":
+                console.debug("Seeking forward 10m due to user keypress");
+                videoSeek(video_player.currentTime + 600);  // 10 minutes forward
+                break;
+            case "PageUp":
+                console.debug("Seeking backward 9m due to user keypress");
+                videoSeek(video_player.currentTime - 540);  // 9 minutes back
                 break;
             case " ":
                 console.debug("Toggling pause due to user keypress");
                 videoPauseToggle();
                 break;
-            case "F11": // FIXME: Chrome's F11 triggered fullscreen is completely different and undetectable from the JS triggered fullscreen
+            case "F11": // FIXME: Chrome's F11 triggered fullscreen is completely different and undetectable from the JS triggered fullscreen, so I'm bypassing it
             case "f":
                 console.debug("Toggling fullscreen due to user keypress");
-                videoToggleFullscreen();
+                videoFullscreenToggle();
                 break;
             case "m":
                 console.debug("Toggling mute due to user keypress");
@@ -405,15 +421,15 @@ function setup_casting() {
     
     // My own convenience functions
     set_media = function() {
-    	var mediaInfo = new chrome.cast.media.MediaInfo(castingMediaURL, 'application/x-mpegURL');
-    	var request = new chrome.cast.media.LoadRequest(mediaInfo);
-    	session.loadMedia(request,
-    	   onMediaDiscovered.bind(this, 'loadMedia'),
-    	   onError);
-    	
-    	function onMediaDiscovered(how, media) {
-    	   currentMedia = media;
-    	}
+        var mediaInfo = new chrome.cast.media.MediaInfo(castingMediaURL, 'application/x-mpegURL');
+        var request = new chrome.cast.media.LoadRequest(mediaInfo);
+        session.loadMedia(request,
+           onMediaDiscovered.bind(this, 'loadMedia'),
+           onError);
+        
+        function onMediaDiscovered(how, media) {
+           currentMedia = media;
+        }
         console.log("Media set")
     }
     init_cast = function() {
