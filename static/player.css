@@ -2,12 +2,20 @@
     --accent-colour: red;
 }
 
+/* Give all text a border colour so that it's readable on any background colour */
+body {
+    text-shadow:
+        -1px -0px 0 var(--accent-colour),
+        0px  -1px 0 var(--accent-colour),
+        -0px 1px  0 var(--accent-colour),
+        1px  0px  0 var(--accent-colour);
+}
 
 #video-container, video {
     /* Fill the window, use black-borders */
     position: fixed;
     width: 100% ; height: 100%;
-    top: 0 ; bottom: 0 ; left: 0 ; right:0;
+    top: 0 ; bottom: 0 ; left: 0 ; right: 0;
     z-index: 0;
     background: black ; color: white;
 }
@@ -16,65 +24,54 @@
     bottom: 0;
 
     width: 100%;
-    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
 
-    z-index: 10;
+    z-index: 10;  /* Stay above the video */
 }
 
-/* Make sure all the controls are on the bottom, and that the controls are somewhat more readable */
+/* Make sure all the controls stay on the bottom, and that the text is somewhat more readable */
 #video-controls * {
     min-width: 1em;
     font-size: x-large;
     vertical-align: bottom;
 }
 
-#seek-container {
-    position: relative;
-}
-
+/* Seek & progress bars */
+#seek-container, #seek-container input { position: relative }
+#seek-container input { display: block }
 #seek-container * {
     width: 100%;
-    left: 0; right: 0; margin: auto;  /* Horizontally center the element */
+    /* Horizontally center the margins because they bring it a little under full width */
+    margin-left: auto; margin-right: auto;
 }
-#seek-container input {
-    position: relative;
-    display: block;
-/*    bottom: 0.5%; height: 2%; */
-    /* Make sure the range element is above the buffered canvas */
-    z-index: 20
-}
-
+/* Put each of the "progress bar" canvases underneath the seek input */
 #seek-container canvas {
     position: absolute;
     top: 0;
     height: 100%;
 }
+#seekable-canvas { z-index: 11 }  /* Data the server has ready to serve */
+#buffered-canvas { z-index: 12 }  /* Data the client has buffered */
+#seek-bar        { z-index: 13 }  /* Current media position */
 
-#seekable-canvas {
-    filter: opacity(50%);
-    color: var(--accent-colour);
-    z-index: 11;
-}
-#buffered-canvas {
-    color: var(--accent-colour);
-    z-index: 12;
-}
+/* Finally, actually style them with some colour */
+#seek-container canvas { color: var(--accent-colour) }
+#seekable-canvas { filter: opacity(33%) }
+#buffered-canvas { filter: opacity(66%) }
 
-/* Firefox sets the slider orientation with a HTML property, make that same property work in Webkit and (untested) IE.
- * FIXME: Just use "transform: rotate(270deg);"?
- */
+/* Change the orientation of the volume & brightness sliders */
+/* NOTE: Firefox sets the slider orientation with a HTML property, */
+/*       for the most part I'm completely ignoring cross-browser-compatibility (for now) */
+/*       but I like the simplicity of using that HTML property so I'm re-using it here. */
+/*       It is still completely untested in anything but Chrome. */
+/* FIXME: Just use "transform: rotate(270deg);"? */
 input[type=range][orient=vertical] {
     width: 1em;
     writing-mode: bt-lr; /* IE */
     -webkit-appearance: slider-vertical; /* WebKit, Chrome/etc */
 }
 
-.vexpand-onhover {
-    height: 1.5em;
-}
-.vexpand-onhover:hover {
-    height: unset;
-}
+.vexpand-onhover { height: 1.5em }
+.vexpand-onhover:hover { height: unset }
 
 .toggle-onhover > .default-hidden     {display: none}
 .toggle-onhover:hover        .default-hidden,
@@ -86,43 +83,36 @@ input[type=range][orient=vertical] {
     display: none
 }
 
-/*  */
+/* Make the current state of toggle-buttons more visible */
+/* FIXME: Replace all these text buttons with more fitting graphic representations */
 button:active, button.active-button {
     border-style: inset;
     padding: 1px 6px;
 }
 
 
-
+/* I would actually prefer to have the controls slide off the screen rather than scale down to 0 height, */
+/* but that had a bunch of confusing issues with trying to get the transition timing right. */
 #video-controls {
-    transition: 
-        bottom 0.5s ease-in-out;
+    transition: transform 0.25s ease-in-out;
+    transform-origin: bottom;
 }
-table.hidden {
-    bottom: -100% !important; 
-}
+#video-controls.hidden { transform: ScaleY(0) }
 body.hide-mouse {cursor:none}
-
 
 
 /* Subtitles styling */
 ::-webkit-media-text-track-container {
-    /* FIXME: This is very browser specific, but for some reason setting the padding on the ::cue element had no effect. */
-    /* padding-bottom: 3em; */ /* Actually, nah, this is ugly */
-    /* FIXME: Why the hell does this transition not even work right?!? */
+    /* FIXME: This is very browser specific, but setting the padding on the ::cue element has no effect. */
+    /* FIXME: I think I'm gonna have to throw this whole idea away because WebVTT actually allows arbitrarily placed cues. */
+    /* This is just so that the transition gets set first,
+     * the actual CSS magic for this is done in the JS because I can't change the class of psuedo elements. */
     bottom: 0;
-    transition: bottom 0.25s steps(10);
- }
+    transition: bottom 0.25s ease-in-out;  /* To match #video-controls */
+}
 ::cue {
-/* Chrome actually defaults to larger than xx-large... except it didn't when I first wrote this, weird. */
+/* Chrome's default subtitle size scales up with the video size, so just don't mess with it. */
 /*    font-size: xx-large; */
-    opacity: 0.8;  /* Should be unnoticable, but still leave the video vaguely visible */
-    background: none;  /* Why the fuck does this even put the black bars there by default? It should at least be mostly opaque */
-/* FIXME: Make this shadow a configurable option, maybe.
- *  text-shadow:
- *      -1px -1px 0 var(--accent-colour),
- *      1px  -1px 0 var(--accent-colour),
- *      -1px 1px  0 var(--accent-colour),
- *      1px  1px  0 var(--accent-colour);
- */
+    opacity: 0.75;  /* Should be mostly unnoticable, but still leave the video vaguely visible */
+    background: none;  /* Why the fuck does this even put the black background there by default? It should at least be mostly opaque */
 }
