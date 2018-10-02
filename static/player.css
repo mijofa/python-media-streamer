@@ -117,6 +117,6 @@ body.hide-mouse {cursor:none}
 ::cue {
 /* Chrome's default subtitle size scales up with the video size, so just don't mess with it. */
 /*    font-size: xx-large; */
-    opacity: 0.75;  /* Should be mostly unnoticable, but still leave the video vaguely visible */
+    opacity: 0.85;  /* Should be mostly unnoticable, but still leave the video vaguely visible */
     background: none;  /* Why the fuck does this even put the black background there by default? It should at least be mostly opaque */
 }
