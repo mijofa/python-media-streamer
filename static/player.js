@@ -330,20 +330,49 @@ function setup_controls() {
 
 
 function add_subtitles() {
-    // FIXME: Implement a subtitle chooser for language selection/etc
-    vtt_track = document.createElement("track");
-    vtt_track.kind = "captions";  // FIXME: This is dynamic, don't hard-code it!
-    vtt_track.srclang = "eng";  // FIXME: This is dynamic, don't hard-code it!
-    vtt_track.language = "English";  // FIXME: This is dynamic, don't hard-code it!
-    vtt_track.src = document.URL+'/subtitles.vtt';
-    video_player.append(vtt_track);
-    vtt_track.addEventListener("load", _ => console.debug("Loaded subtitles"));
-    vtt_track.addEventListener("load", _ => this.mode = "showing");
-//    // FIXME: Internet said Firefox needs this too
-//    vtt_track.addEventListener("load", _ => video_player.textTracks[0].mode = "showing");
-    // FIXME: They don't actually trigger until the mode is set to 'showing',
-    vtt_track.mode = "showing";
-    // FIXME: That doesn't work either... Just go add UI buttons
+    // FIXME: Render the HTML as a Flask template and do all this in HTML, not JS
+    var req = new XMLHttpRequest();
+    req.open("GET", document.URL+"/get_caption_tracks.json", true);
+    req.onload = function(e) {
+        caption_tracks = JSON.parse(req.responseText);
+        captions_menu = document.getElementById("captions-menu");
+        if (Object.keys(caption_tracks).length == 0) {
+            captions_menu.parentElement.remove()
+        } else {
+            for (var track_index in caption_tracks) {
+                var track = caption_tracks[track_index];
+                track_element = document.createElement("track");
+                track_element.language = track["language"];
+                // FIXME: Consider the caption type, subtitles vs. captions
+                track_element.title = track["title"];
+                track_element.src = document.URL+'/get_captions.vtt?index='+track_index;
+                video_player.append(track_element);
+                track_element.addEventListener("load", ev => console.debug("Loaded", ev.target.language, "caption track"));
+
+                menu_item = document.createElement("a");
+                menu_item.track = track_element.track;
+                menu_item.classList.add("captions-menu-item");
+                menu_item.innerText = track["title"];
+                menu_item.href = "#";  // If I don't give it a href, it doesn't look clickable
+                menu_item.addEventListener("click", function(ev) {
+                    console.debug("clicked", ev.target);
+                    console.debug(ev.target.track);
+                    if (ev.target.track.mode == "showing") {
+                        ev.target.track.mode = "disabled";
+                        ev.target.classList.remove("active");
+                    } else {
+                        ev.target.track.mode = "showing";
+                        ev.target.classList.add("active");
+                    }
+                    ev.preventDefault();
+                })
+                captions_menu.append(menu_item);
+                captions_menu.append('\n');
+            }
+        }
+    }
+    req.send();
+    return
 }
 
 function init_hls() {

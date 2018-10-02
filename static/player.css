@@ -120,3 +120,13 @@ body.hide-mouse {cursor:none}
     opacity: 0.85;  /* Should be mostly unnoticable, but still leave the video vaguely visible */
     background: none;  /* Why the fuck does this even put the black background there by default? It should at least be mostly opaque */
 }
+
+
+.captions-menu-item {
+    background-color: var(--accent-colour);
+    opacity: 0.5;
+}
+.captions-menu-item.active {
+    background-color: var(--accent-colour);
+    opacity: 1;
+}

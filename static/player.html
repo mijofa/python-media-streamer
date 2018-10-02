@@ -24,6 +24,10 @@
                 <td><button type="button" id="mute">Mute</button></td>
                 <!-- orient="vertical" only actually has an affect in Firefox, but I'm going to use it in my CSS to simplify cross-browser compatibility. -->
                 <td><input class="vexpand-onhover" orient="vertical" type="range" id="volume-bar" min="0" max="100" step="1" value="75" title="75%"></td>
+                <td class="toggle-onhover">
+                    <span class="default-hidden" id="captions-menu"></span>
+                    <span class="default-shown">CC</span>  <!-- FIXME: Get an image or something for this -->
+                </td>
                 <td id="position-current"></td>
                 <td width="100%"></td>
                 <td id="position-end"></td>
@@ -34,7 +38,7 @@
                 <td><button type="button" id="full-screen">Fullscreen</button></td>
             </tr>
             <tr>
-                <td colspan="999">
+                <td colspan="999">  <!-- Make sure it stretches the full width of the controls -->
                     <div id="seek-container">
                         <input type="range" id="seek-bar" value=0>
                         <canvas id="seekable-canvas"></canvas>

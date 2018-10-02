@@ -36,13 +36,22 @@ def watch(filename):
     return flask.send_from_directory('static', 'player.html', mimetype='text/html')
 
 
-@app.route('/watch/<path:filename>/subtitles-<string:language>.vtt')
-@app.route('/watch/<path:filename>/subtitles.vtt', defaults={'language': 'English'})
-def subtitles(filename, language):
+@app.route('/watch/<path:filename>/get_captions.vtt')
+def get_captions(filename):
     fileuri = get_mediauri(filename)
 
-    resp = flask.make_response(ffmpeg.get_subtitles(fileuri, language))
+    resp = flask.make_response(ffmpeg.get_captions(fileuri, flask.request.args.get('index')))
+    # Must return vtt regardless of input type
     resp.mimetype = 'text/vtt'
+    return resp
+
+
+@app.route('/watch/<path:filename>/get_caption_tracks.json')
+def get_caption_tracks(filename):
+    fileuri = get_mediauri(filename)
+
+    resp = flask.make_response(ffmpeg.get_caption_tracks(fileuri))
+    resp.mimetype = "application/json"
     return resp
 
 

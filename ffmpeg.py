@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import glob
 import json
 import multiprocessing
 import operator
@@ -6,6 +7,7 @@ import os
 import signal
 import subprocess
 import sys
+import urllib.parse
 
 import flask
 
@@ -66,13 +68,13 @@ def get_duration(fileuri: str):
     # FIXME: Can ffmpeg just tell us the duration as it starts up?
     # FIXME: Add a reasonable timeout. What's reasonable?
     # FIXME: Technically each track within the media file can have a different duration.
-    ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
-        'ffprobe', '-loglevel', 'error',
-        '-show_entries', 'format=duration',
-        '-print_format', 'json=compact=1',
-        '-i', fileuri])
-    assert ffprobe.returncode == 0  # check=True should've already taken care of this.
-    probed_info = json.loads(ffprobe.stdout)
+    probe = subprocess.check_output(
+        stdin=subprocess.DEVNULL, universal_newlines=True, args=[
+            'ffprobe', '-loglevel', 'error',
+            '-show_entries', 'format=duration',
+            '-print_format', 'json=compact=1',
+            '-i', fileuri])
+    probed_info = json.loads(probe)
     assert "format" in probed_info
     assert "duration" in probed_info["format"]
     assert len(probed_info.keys()) == 1
@@ -80,29 +82,60 @@ def get_duration(fileuri: str):
     return float(probed_info["format"]["duration"])
 
 
-def get_subtitles(fileuri: str, language: str):
+def get_caption_tracks(fileuri: str):
+    caption_tracks = {}
+
+    probe = subprocess.check_output(
+        stdin=subprocess.DEVNULL, universal_newlines=True, args=[
+            'ffprobe', '-loglevel', 'error', '-print_format', 'json',
+            fileuri, '-select_streams', 's',
+            '-show_entries', 'stream=index:stream_tags'])
+    probed_info = json.loads(probe)
+    assert "streams" in probed_info
+    for track in probed_info["streams"]:
+        if "language" not in track["tags"]:
+            track["tags"]["language"] = "und"
+            if "title" not in track["tags"]:
+                track["tags"]["title"] = "Undetermined"
+        if "title" not in track["tags"]:
+            track["tags"]["title"] = track["tags"]["language"].title()  # FIXME: Make a better title
+        caption_tracks["native:{}".format(track["index"])] = track["tags"]
+
+    parseduri = urllib.parse.urlparse(fileuri)
+    if parseduri.scheme in ('', 'file'):
+        # Find every file with just a different extension
+        for ind, sub_file in enumerate(glob.glob("{}.*".format(parseduri.path.rpartition(os.path.extsep)[0]))):
+            ext = sub_file.rpartition(os.path.extsep)[-1]
+            # FIXME: Can ffmpeg support sub/idx?
+            if ext.lower() in ('srt', 'vtt'):
+                caption_tracks["supplementary:{}".format(ext)] = {
+                    "title": ext.upper(),
+                    "language": "und"}  # I think this is the standard for "undetermined"
+
+    return json.dumps(caption_tracks)
+
+
+def get_captions(fileuri: str, index: str):
+    input_type, stream_id = index.split(':')
+    if input_type == 'supplementary':
+        fileuri = os.path.extsep.join((fileuri.rpartition(os.path.extsep)[0], stream_id))
+        stream_map = 's'
+    elif input_type == "native":
+        # FIXME: Understand this better
+        #        I think the '0:' means "the first file" or similar.
+        #        I think if I were using larger mpeg-ts streams (like DVB-T) it would get more complicated.
+        stream_map = "0:{}".format(stream_id)
+
     # FIXME: In all my testing, ffmpeg did this job really quick,
     #        but perhaps I should turn this into a generator so as to not assume that will be the case.
-    for fileuri in (fileuri, fileuri.rpartition(os.path.extsep)[0] + '.srt'):
-        print("Attempting to extract subtitles from", fileuri)
-        try:
-            vtt_result = subprocess.check_output(
-                stdin=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                args=[
-                    'ffmpeg', '-loglevel', 'error', '-nostdin',
-                    '-i', fileuri,  # Everything after this only applies to the output
-                    '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
-                    '-map', 's:m:language:{}'.format(language),  # FIXME: is that the right way to determine the language?
-                    'pipe:1'])
-        except subprocess.CalledProcessError as e:
-            if e.stderr.startswith(b'Stream map ') and b'matches no streams.' in e.stderr:
-                # b"Stream map 's:m:language:English' matches no streams.\nTo ignore this, add a trailing '?' to the map.\n"
-                continue
-            else:
-                # I don't know what this error is, but it's not what was expected
-                raise
-        else:
-            break
+    vtt_result = subprocess.check_output(
+        stdin=subprocess.DEVNULL,
+        args=[
+            'ffmpeg', '-loglevel', 'error', '-nostdin',
+            '-i', fileuri,  # Everything after this only applies to the output
+            '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
+            '-map', stream_map,
+            'pipe:1'])
 
     return vtt_result
 
