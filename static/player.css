@@ -4,20 +4,22 @@
 
 /* Give all text a border colour so that it's readable on any background colour */
 body {
+    background: black;
+    color: white;
+    /* FIXME: Is there a CSS function that will let me set this to "background-color" rather than "black"? */
     text-shadow:
-        -1px -0px 0 var(--accent-colour),
-        0px  -1px 0 var(--accent-colour),
-        -0px 1px  0 var(--accent-colour),
-        1px  0px  0 var(--accent-colour);
+        -1px -0px 0 black,
+        0px  -1px 0 black,
+        -0px 1px  0 black,
+        1px  0px  0 black;
 }
 
 #video-container, video {
-    /* Fill the window, use black-borders */
+    /* Fill the window */
     position: fixed;
     width: 100% ; height: 100%;
     top: 0 ; bottom: 0 ; left: 0 ; right: 0;
     z-index: 0;
-    background: black ; color: white;
 }
 #video-controls {
     position: fixed;
@@ -99,7 +101,7 @@ button:active, button.active-button {
     transition: transform 0.25s ease-in-out;
     transform-origin: bottom;
 }
-#video-controls.hidden { transform: ScaleY(0) }
+#video-controls.hidden:not(:hover) { transform: ScaleY(0) }
 body.hide-mouse {cursor:none}
 
 
