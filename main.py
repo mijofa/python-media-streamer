@@ -1,6 +1,7 @@
 #!/usr/bin/python3
-import sys
+import errno
 import os
+import sys
 
 import flask
 
@@ -18,7 +19,9 @@ media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 
 def get_mediauri(filename):
     filepath = os.path.join(os.path.abspath(media_path), filename)
-    assert os.path.exists(filepath) and not os.path.isdir(filepath)
+    if not os.path.exists(filepath) or os.path.isdir(filepath):
+        # Technically this is invalid for "isdir", but good enough.
+        raise FileNotFoundError(errno.ENOENT, "No such media file", filename)
     fileuri = 'file:' + filepath
     del filename
     del filepath
@@ -33,6 +36,11 @@ def index():
 
 @app.route('/watch/<path:filename>')
 def watch(filename):
+    try:
+        get_mediauri(filename)
+    except FileNotFoundError as e:
+        return ' '.join((e.strerror, e.filename)), 404
+
     return flask.send_from_directory('static', 'player.html', mimetype='text/html')
 
 

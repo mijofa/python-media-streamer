@@ -116,7 +116,7 @@ def get_caption_tracks(fileuri: str):
 
 
 def get_captions(fileuri: str, index: str):
-    input_type, stream_id = index.split(':')
+    input_type, stream_id = index.split(':', 1)
     if input_type == 'supplementary':
         fileuri = os.path.extsep.join((fileuri.rpartition(os.path.extsep)[0], stream_id))
         stream_map = 's'
@@ -128,16 +128,25 @@ def get_captions(fileuri: str, index: str):
 
     # FIXME: In all my testing, ffmpeg did this job really quick,
     #        but perhaps I should turn this into a generator so as to not assume that will be the case.
-    vtt_result = subprocess.check_output(
-        stdin=subprocess.DEVNULL,
-        args=[
-            'ffmpeg', '-loglevel', 'error', '-nostdin',
-            '-i', fileuri,  # Everything after this only applies to the output
-            '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
-            '-map', stream_map,
-            'pipe:1'])
-
-    return vtt_result
+    try:
+        vtt_result = subprocess.check_output(
+            stdin=subprocess.DEVNULL, stderr=subprocess.PIPE, universal_newlines=True,
+            args=[
+                'ffmpeg', '-loglevel', 'error', '-nostdin',
+                '-i', fileuri,  # Everything after this only applies to the output
+                '-codec:s', 'webvtt', '-f', 'webvtt',  # WebVTT is all that's supported, so no need to get smart here
+                '-map', stream_map,
+                'pipe:1'])
+    except subprocess.CalledProcessError as e:
+        err = e.stderr.strip()
+        if (err.endswith('No such file or directory') or 
+            'matches no streams.' in err):
+                return e.stderr, 404
+        else:
+            print(e.stderr, file=sys.stderr)
+            raise
+    else:
+        return vtt_result
 
 
 def _wait_for_manifest(output_dir: str):
