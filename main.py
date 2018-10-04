@@ -2,8 +2,10 @@
 import errno
 import os
 import sys
+import urllib.parse
 
 import flask
+import magic
 
 import ffmpeg
 
@@ -15,6 +17,7 @@ app = flask.Flask("web-emcee")
 TMP_DIR = os.path.join(os.environ.get('XDG_RUNTIME_DIR', os.environ.get('TMPDIR', '/tmp/')), app.name)
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
+media_path += '/' if not media_path.endswith('/') else ''
 
 
 def get_mediauri(filename):
@@ -32,6 +35,38 @@ def get_mediauri(filename):
 @app.route('/')
 def index():
     return "Indexing isn't supported yet"
+
+
+@app.route('/browse/<path:dirpath>')
+def browse(dirpath):
+    dirpath = os.path.join(os.path.abspath(media_path), dirpath)
+    if not os.path.exists(dirpath) or not os.path.isdir(dirpath):
+        # Technically this is invalid for "isdir", but good enough.
+        raise FileNotFoundError(errno.ENOENT, "No such directory", dirpath)
+
+    entries = list(os.scandir(dirpath))
+    # False sorts before True
+    # So this makes directories first, then sorts by name
+    entries.sort(key=lambda e: (e.is_file(), e.name))
+    ret_html = "<html><head></head><body>"
+    for e in entries:
+        if not e.name.startswith('.'):  # Hide hidden files & directories
+            if not e.is_file():
+                # This can be a relative path so just use the name
+                ret_html += "<a href={path}>{name}/</a><br>".format(path=urllib.parse.quote(e.name), name=e.name)
+            else:
+                # FIXME: just chdir into the root on start, then it need never be in a variable again
+                path = e.path[len(media_path):]  # Remove the media_path root directory from the path
+                print(media_path, path, e.path)
+                ftype = magic.detect_from_filename(e.path)
+                if ftype.mime_type.startswith('video/'):
+                    ret_html += "<a href=/watch/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
+                else:
+                    ret_html += "<a href=/raw_media/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
+    ret_html += "</body>"
+    resp = flask.make_response(ret_html)
+    resp.mimetype = 'text/html'
+    return resp
 
 
 @app.route('/watch/<path:filename>')
