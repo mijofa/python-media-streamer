@@ -20,6 +20,26 @@ media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 media_path += '/' if not media_path.endswith('/') else ''
 
 
+magic_db = magic.open(sum((
+    magic.SYMLINK,  # Follow symlinks
+    magic.MIME_TYPE,  # Just report the mimetype, don't make it human-readable.
+    magic.PRESERVE_ATIME,  # Preserve the file access time, since I'm only using this when listing the directories
+    # Literally just [i for i in dir(magic) if i.startswith('NO_CHECK')]
+    # I expect that by disabling all these checks it should be quicker & more efficient.
+    magic.NO_CHECK_APPTYPE,
+    magic.NO_CHECK_BUILTIN,
+    magic.NO_CHECK_CDF,
+    magic.NO_CHECK_COMPRESS,
+    magic.NO_CHECK_ELF,
+    magic.NO_CHECK_ENCODING,
+    magic.NO_CHECK_SOFT,
+    magic.NO_CHECK_TAR,
+    ## I need to actually check for text files
+    # magic.NO_CHECK_TEXT
+    magic.NO_CHECK_TOKENS,
+)))
+
+
 def get_mediauri(filename):
     filepath = os.path.join(os.path.abspath(media_path), filename)
     if not os.path.exists(filepath) or os.path.isdir(filepath):
@@ -37,7 +57,35 @@ def index():
     return "Indexing isn't supported yet"
 
 
-@app.route('/browse/<path:dirpath>')
+def _sort_key(entry):
+    # Takes a posix.DirEntry object and makes it more intelligently sortable
+    if entry.is_file() and '.' in entry.name and not entry.name.startswith('.'):
+        name, ext = entry.name.rsplit('.', maxsplit=1)
+    else:
+        name = entry.name
+        ext = ''
+    first_word = name.split(maxsplit=1)[0]
+    if first_word.lower() in ('the', 'an', 'a'):
+        # Sort "The Truman Show" as "Truman Show, The"
+        # Sort "An Easter Carol" as "Easter Carol, An"
+        # Sort "A Fish Called Wanda" as "Fish Called Wanda, A"
+        name = "{name}, {first}".format(name=name[len(first_word) + 1:], first=first_word)
+    # FIXME: Turn roman numerals ("Part II", "Part IV", etc) into digits.
+    #        But how can I identify what's a roman numberal and what's just an I in the title?
+    # FIXME: Should I even try to do anything about Ocean's Eleven/Twelve/Thirteen/Eight?
+    #        For that particular series there's no right answer (8 before 11 is wrong, but so is E before T)
+    #        Does anything else spell out the numbers instead of using digits or roman numerals?
+    # FIXME: One thing I did in UPMC was add 1 to the end of everything that had no digits,
+    #        so as to make "Foo" sort before "Foo 2".
+    #        I think this is solvable in the locale, but I don't know how
+    # False comes before True, so this will put directories first
+    return entry.is_file(), name, ext
+
+
+# NOTE: The trailing '/' is important!
+#       Without that Flask will remove any trailing slash, breaking the relative links
+@app.route('/browse/', defaults={'dirpath': ''})
+@app.route('/browse/<path:dirpath>/')
 def browse(dirpath):
     dirpath = os.path.join(os.path.abspath(media_path), dirpath)
     if not os.path.exists(dirpath) or not os.path.isdir(dirpath):
@@ -47,19 +95,21 @@ def browse(dirpath):
     entries = list(os.scandir(dirpath))
     # False sorts before True
     # So this makes directories first, then sorts by name
-    entries.sort(key=lambda e: (e.is_file(), e.name))
+    # FIXME: Give each entry object a sort_key variable,
+    #        because it needs to be used for more than just the actual sorting.
+    #    eg: Give each letter a heading in the listing.
+    entries.sort(key=_sort_key)
     ret_html = "<html><head></head><body>"
     for e in entries:
         if not e.name.startswith('.'):  # Hide hidden files & directories
             if not e.is_file():
-                # This can be a relative path so just use the name
-                ret_html += "<a href={path}>{name}/</a><br>".format(path=urllib.parse.quote(e.name), name=e.name)
+                # Note I use e.name here instead of the path because I can just use it as a relative path.
+                ret_html += "<a href={path}/>{name}/</a><br>".format(path=urllib.parse.quote(e.name), name=e.name)
             else:
                 # FIXME: just chdir into the root on start, then it need never be in a variable again
                 path = e.path[len(media_path):]  # Remove the media_path root directory from the path
-                print(media_path, path, e.path)
-                ftype = magic.detect_from_filename(e.path)
-                if ftype.mime_type.startswith('video/'):
+                ftype = magic_db.file(e.path)  # FIXME: This still isn't fast enough!
+                if ftype.startswith('video/'):
                     ret_html += "<a href=/watch/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
                 else:
                     ret_html += "<a href=/raw_media/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
@@ -156,4 +206,6 @@ def get_ip():
 if __name__ == "__main__":
     if not os.path.isdir(TMP_DIR):
         os.mkdir(TMP_DIR)
+    magic_db.load()  # FIXME: Use a smaller (more specifically relevant) database file rather than the default
     app.run(debug=True, host='0.0.0.0', threaded=True)
+    magic_db.close()  # FIXME: Will this ever actually run?
