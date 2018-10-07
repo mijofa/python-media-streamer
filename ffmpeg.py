@@ -2,7 +2,6 @@
 import glob
 import json
 import multiprocessing
-import operator
 import os
 import signal
 import subprocess
@@ -22,46 +21,6 @@ import flask
 ##     'video': ['h264', 'vp8'],  # Chromecast Ultra also supports ['hevc', 'vp9']
 ##     'audio': ['aac', 'flac', 'mp3', 'opus', 'vorbis'],
 ## }
-
-
-def probe(fileuri: str):
-    """Probe for codec info and generic track metadata"""
-    # FIXME: Add a reasonable timeout. What's reasonable?
-    ffprobe = subprocess.run(stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, universal_newlines=True, check=True, args=[
-        'ffprobe', '-loglevel', 'error',
-        '-show_entries', 'stream=index,codec_name,codec_type,channels,r_frame_rate:stream_tags:format=format_name,duration',
-        '-print_format', 'json=compact=1',
-        '-i', fileuri])
-    assert ffprobe.returncode == 0  # check=True should've already taken care of this.
-    probed_info = json.loads(ffprobe.stdout)
-    assert len(probed_info['streams']) <= 2, "Subtitles & multiple audio/video tracks are currently unsupported"
-    container_info = {'format': probed_info['format']['format_name'],
-                      'duration': float(probed_info['format']['duration'])}  # Why isn't ffprobe giving us a float here?
-    v_streams = []
-    a_streams = []
-    # Note the index here will have the first "stream" is video and the second "stream" is audio,
-    # but when reffering to them later I refer to them as the first "video stream" and the first "audio stream".
-    # This inconsistency is confusing, so by making sure it's sorted by the index first
-    # I should be able to avoid storing the index and keep the confusion here and only here.
-    for stream in sorted(probed_info['streams'], key=lambda d: d.get('index')):
-        if stream['codec_type'] == 'video':
-            fps = operator.truediv(*(int(i) for i in stream['r_frame_rate'].split('/')))
-            # FIXME: Is there any identifiers worth adding here?
-            v_streams.append({'codec': stream['codec_name'], 'fps': fps})
-        elif stream['codec_type'] == 'audio':
-            # FIXME: Pretty sure I've seen some sort of labels on audio & subtitle streams.
-            #        Maybe that's just put together from the tags?
-            a_streams.append({'codec': stream['codec_name'],
-                              # Need to get channels because aac is supported by Chromecast, but not with more than 2 channels,
-                              # and I intend to (if possible) codec copy when the original is already supported.
-                              'channels': stream['channels'],
-                              # There might be no language tag, or there might be no tags at all
-                              # FIXME: Should I just put the entire 'tags' section here?
-                              'language': stream.get('tags', {}).get('language', '')})
-        else:
-            raise NotImplementedError("Streams of type {} are not supported".format(stream['codec_type']))
-    print(v_streams, a_streams)
-    return {'container': container_info, 'video': v_streams, 'audio': a_streams}
 
 
 def get_duration(fileuri: str):
@@ -139,7 +98,7 @@ def get_captions(fileuri: str, index: str):
                 'pipe:1'])
     except subprocess.CalledProcessError as e:
         err = e.stderr.strip()
-        if (err.endswith('No such file or directory') or 
+        if (err.endswith('No such file or directory') or
             'matches no streams.' in err):
                 return e.stderr, 404
         else:
@@ -171,6 +130,7 @@ def start_transcode(output_dir: str, fileuri: str):
         cwd=output_dir, args=[
             'ffmpeg', '-loglevel', 'error', '-nostdin',
             '-i', fileuri,  # Everything after this only applies to the output
+            '-map', 'v', '-map', 'a',  # FIXME: Only grab one of each. For now this is just me making sure to ignore the subs
             '-codec:a', 'libmp3lame', '-codec:v', 'libx264',  # FIXME: Copy the codec when it's already supported
             '-f', 'hls', '-hls_playlist_type', 'vod',
             '-hls_segment_filename', 'hls-segment-%d.ts',  # I would like to 0-pad the number, but I don't know how far to pad it
