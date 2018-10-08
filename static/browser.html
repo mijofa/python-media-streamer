@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="/static/emcee.css">
+        <link rel="stylesheet" type="text/css" href="/static/browser.css">
+        <script type="text/javascript" src="/static/browser.js"></script>
+    </head>
+    <body>
+        <!-- FIXME: Should this really be an <ol>? -->
+        <ol class="flex-container" id="directory-listing">
+            <!-- Flask turns ".." into actually going up a directory, this simplifies so much -->
+            <li><a href=".." class="back">Back</a></li>
+            <li id="loading">Loading...</li>
+        </ol>
+    </body>
+</html>
+

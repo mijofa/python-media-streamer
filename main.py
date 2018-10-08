@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import errno
+import json
 import os
 import sys
 import urllib.parse
@@ -54,15 +55,16 @@ def get_mediauri(filename):
 
 @app.route('/')
 def index():
-    return "Indexing isn't supported yet"
+    return "Front page not designed yet"
 
 
 def _sort_key(entry):
-    # Takes a posix.DirEntry object and makes it more intelligently sortable
-    if entry.is_file() and '.' in entry.name and not entry.name.startswith('.'):
-        name, ext = entry.name.rsplit('.', maxsplit=1)
+    # Takes a dict based on posix.DirEntry and makes it more intelligently sortable
+    assert isinstance(entry, dict)
+    if entry['is_file'] and os.path.extsep in entry['name'].lstrip(os.path.extsep):
+        name, ext = entry['name'].rsplit(os.path.extsep, maxsplit=1)
     else:
-        name = entry.name
+        name = entry['name']
         ext = ''
     first_word = name.split(maxsplit=1)[0]
     if first_word.lower() in ('the', 'an', 'a'):
@@ -75,48 +77,46 @@ def _sort_key(entry):
     # FIXME: Should I even try to do anything about Ocean's Eleven/Twelve/Thirteen/Eight?
     #        For that particular series there's no right answer (8 before 11 is wrong, but so is E before T)
     #        Does anything else spell out the numbers instead of using digits or roman numerals?
+
+    # It's probably evil to edit the thing I'm sorting,
+    # but it seems the most relevant place to put this.
+    assert 'sort_key' not in entry
+    entry['sort_key'] = name
     # FIXME: One thing I did in UPMC was add 1 to the end of everything that had no digits,
     #        so as to make "Foo" sort before "Foo 2".
     #        I think this is solvable in the locale, but I don't know how
     # False comes before True, so this will put directories first
-    return entry.is_file(), name, ext
+    # FIXME: Ignore ext completely?
+    return entry['is_file'], name, ext
 
 
-# NOTE: The trailing '/' is important!
-#       Without that Flask will remove any trailing slash, breaking the relative links
-@app.route('/browse/', defaults={'dirpath': ''})
-@app.route('/browse/<path:dirpath>/')
-def browse(dirpath):
+@app.route('/browser/ls.json', defaults={'dirpath': ''})
+@app.route('/browser/<path:dirpath>/ls.json')
+def listdir(dirpath):
     dirpath = os.path.join(os.path.abspath(media_path), dirpath)
     if not os.path.exists(dirpath) or not os.path.isdir(dirpath):
         # Technically this is invalid for "isdir", but good enough.
         raise FileNotFoundError(errno.ENOENT, "No such directory", dirpath)
+    entries = ({
+        'is_dir': entry.is_dir(),
+        'is_file': entry.is_file(),
+        'name': entry.name,
+        'path': entry.path[len(media_path):],  # Remove the media_path root directory from the path
+        'hidden': entry.name.startswith('.'),
+        'mimetype': magic_db.file(entry.path),
+    } for entry in os.scandir(dirpath))
 
-    entries = list(os.scandir(dirpath))
-    # False sorts before True
-    # So this makes directories first, then sorts by name
-    # FIXME: Give each entry object a sort_key variable,
-    #        because it needs to be used for more than just the actual sorting.
-    #    eg: Give each letter a heading in the listing.
-    entries.sort(key=_sort_key)
-    ret_html = "<html><head></head><body>"
-    for e in entries:
-        if not e.name.startswith('.'):  # Hide hidden files & directories
-            if not e.is_file():
-                # Note I use e.name here instead of the path because I can just use it as a relative path.
-                ret_html += "<a href={path}/>{name}/</a><br>".format(path=urllib.parse.quote(e.name), name=e.name)
-            else:
-                # FIXME: just chdir into the root on start, then it need never be in a variable again
-                path = e.path[len(media_path):]  # Remove the media_path root directory from the path
-                ftype = magic_db.file(e.path)  # FIXME: This still isn't fast enough!
-                if ftype.startswith('video/'):
-                    ret_html += "<a href=/watch/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
-                else:
-                    ret_html += "<a href=/raw_media/{path}>{name}</a><br>".format(path=urllib.parse.quote(path), name=e.name)
-    ret_html += "</body>"
-    resp = flask.make_response(ret_html)
-    resp.mimetype = 'text/html'
-    return resp
+    json_str = json.dumps(sorted(entries, key=_sort_key))
+
+    return json_str
+
+
+# NOTE: The trailing '/' is important!
+#       Without that Flask will remove any trailing slash, breaking the relative links
+@app.route('/browser/', defaults={'dirpath': ''})
+@app.route('/browser/<path:dirpath>/')
+def browser(dirpath):
+    return flask.send_from_directory('static', 'browser.html', mimetype='text/html')
 
 
 @app.route('/watch/<path:filename>')

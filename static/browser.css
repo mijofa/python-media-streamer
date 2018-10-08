@@ -1,0 +1,15 @@
+.flex-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.back {
+    color: var(--accent-colour);
+}
+
+.directory-entry {
+    font-weight: bold;
+}
+.directory-entry a::after {
+    content: "/";
+}
