@@ -1,7 +1,3 @@
-:root {
-    --accent-colour: red;
-}
-
 /* Give all text a border colour so that it's readable on any background colour */
 body {
     background: black;
