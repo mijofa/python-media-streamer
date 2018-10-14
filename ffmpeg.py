@@ -142,6 +142,7 @@ def start_transcode(output_dir: str, fileuri: str):
             'hls-manifest.m3u8'])
     timer = multiprocessing.Process(target=_wait_for_manifest, args=(output_dir,))
     timer.start()
+    # FIXME: I don't think I'm waiting long enough, not sure, but this has had false negatives at times.
     timer.join(timeout=5)  # Wait for process to end or 5 seconds, whichever comes first.
 
     if ffmpeg.poll():

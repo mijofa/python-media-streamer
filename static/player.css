@@ -121,6 +121,7 @@ body.hide-mouse {cursor:none}
 .captions-menu-item {
     background-color: var(--accent-colour);
     opacity: 0.5;
+    white-space: nowrap;
 }
 .captions-menu-item.active {
     background-color: var(--accent-colour);
