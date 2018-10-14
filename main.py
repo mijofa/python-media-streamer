@@ -3,12 +3,13 @@ import errno
 import json
 import os
 import sys
-import urllib.parse
 
 import flask
 import magic
 
 import ffmpeg
+
+import vfs
 
 app = flask.Flask("web-emcee")
 
@@ -58,55 +59,19 @@ def index():
     return "Front page not designed yet"
 
 
-def _sort_key(entry):
-    # Takes a dict based on posix.DirEntry and makes it more intelligently sortable
-    assert isinstance(entry, dict)
-    if entry['is_file'] and os.path.extsep in entry['name'].lstrip(os.path.extsep):
-        name, ext = entry['name'].rsplit(os.path.extsep, maxsplit=1)
-    else:
-        name = entry['name']
-        ext = ''
-    first_word = name.split(maxsplit=1)[0]
-    if first_word.lower() in ('the', 'an', 'a'):
-        # Sort "The Truman Show" as "Truman Show, The"
-        # Sort "An Easter Carol" as "Easter Carol, An"
-        # Sort "A Fish Called Wanda" as "Fish Called Wanda, A"
-        name = "{name}, {first}".format(name=name[len(first_word) + 1:], first=first_word)
-    # FIXME: Turn roman numerals ("Part II", "Part IV", etc) into digits.
-    #        But how can I identify what's a roman numberal and what's just an I in the title?
-    # FIXME: Should I even try to do anything about Ocean's Eleven/Twelve/Thirteen/Eight?
-    #        For that particular series there's no right answer (8 before 11 is wrong, but so is E before T)
-    #        Does anything else spell out the numbers instead of using digits or roman numerals?
-
-    # It's probably evil to edit the thing I'm sorting,
-    # but it seems the most relevant place to put this.
-    assert 'sort_key' not in entry
-    entry['sort_key'] = name
-    # FIXME: One thing I did in UPMC was add 1 to the end of everything that had no digits,
-    #        so as to make "Foo" sort before "Foo 2".
-    #        I think this is solvable in the locale, but I don't know how
-    # False comes before True, so this will put directories first
-    # FIXME: Ignore ext completely?
-    return entry['is_file'], name, ext
-
-
 @app.route('/browser/ls.json', defaults={'dirpath': ''})
 @app.route('/browser/<path:dirpath>/ls.json')
 def listdir(dirpath):
-    dirpath = os.path.join(os.path.abspath(media_path), dirpath)
-    if not os.path.exists(dirpath) or not os.path.isdir(dirpath):
-        # Technically this is invalid for "isdir", but good enough.
-        raise FileNotFoundError(errno.ENOENT, "No such directory", dirpath)
-    entries = ({
-        'is_dir': entry.is_dir(),
-        'is_file': entry.is_file(),
-        'name': entry.name,
-        'path': entry.path[len(media_path):],  # Remove the media_path root directory from the path
-        'hidden': entry.name.startswith('.'),
-        'mimetype': magic_db.file(entry.path),
-    } for entry in os.scandir(dirpath))
+    entries = [{
+        'is_file': isinstance(e, vfs.File),
+        'mimetype': e.mimetype,
+        'name': e.name,
+        'path': e.path,
+        'sortkey': e.sortkey,
+        'preview': e.preview.get_thumbnail() if e.preview else None,
+    } for e in vfs.Folder(dirpath)]
 
-    json_str = json.dumps(sorted(entries, key=_sort_key))
+    json_str = json.dumps(entries)
 
     return json_str
 

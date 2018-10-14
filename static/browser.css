@@ -1,3 +1,9 @@
+lh {
+    font-size: larger;
+    /* I want to counter the ol padding, but only for the headings, so I can't just remove the padding entirely */
+    position: relative; left: -40px;
+}
+
 .flex-container {
     display: flex;
     flex-direction: column;

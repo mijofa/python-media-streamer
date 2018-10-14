@@ -1,8 +1,12 @@
 #!/usr/bin/python3
+import base64
 import errno
+import io
+import json
 import os
 import sys
 
+import PIL.Image
 import magic
 
 # FIXME: Put this in a config file somehow
@@ -15,6 +19,7 @@ class vfs_Object():
     _uri = None
     _sortkey = None
     _mimetype = ''
+    preview = None
 
     def __repr__(self):
         # The '!r' runs repr on the object, which I'm using in this case just so that the pathname gets quoted well
@@ -25,9 +30,13 @@ class vfs_Object():
         if self.__class__.__name__ == 'vfs_Object':
             raise NotImplementedError("vfs_Object is not supposed to be used directly")
 
-        self._relpath = path
+        if path.startswith(_CONFIG_MEDIA_PATH):
+            self._relpath = path[len(_CONFIG_MEDIA_PATH):].lstrip(os.path.sep)
+            self._fullpath = path
+        else:
+            self._relpath = path
+            self._fullpath = os.path.join(os.path.abspath(_CONFIG_MEDIA_PATH), path)
 
-        self._fullpath = os.path.join(os.path.abspath(_CONFIG_MEDIA_PATH), self._relpath)
         if not os.path.exists(self._fullpath):
             raise FileNotFoundError(errno.ENOENT, "No such file or directory", path)
         if self._isfile is not None:
@@ -76,7 +85,6 @@ class vfs_Object():
 class File(vfs_Object):
     """Generic file class"""
     _isfile = True
-    poster = None
 
     def __init__(self, path, mimetype='', **kwargs):
         super().__init__(path, **kwargs)
@@ -89,13 +97,36 @@ class Video(File):
 
 class Image(File):
     def __init__(self, *args, **kwargs):
-        self.poster = self
+        self.preview = self
         super().__init__(*args, **kwargs)
+
+    def get_thumbnail(self, size=(280, 180)):  # FIXME: Default size inherited from UPMC, get a better size
+        assert isinstance(size, tuple)
+        assert len(size) == 2
+        image_buffer = io.BytesIO()
+        im = PIL.Image.open(self._fullpath)
+        im.thumbnail(size=size)
+        im.save(image_buffer, format='png')  # FIXME: Is PNG reasonable? Not using JPEG because I want alpha channel support
+        image_buffer.seek(0)
+        b64_data = base64.b64encode(image_buffer.read())
+        image_buffer.close()
+        return b64_data.decode('ascii')
 
 
 class Folder(vfs_Object):
     """Folder class, iterate across this to get File/Video/Image objects for each directory entry"""
     _isfile = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # FIXME: This criteria stolen from UPMC.
+        #        Reasonable while still using the UPMC storage backend, but should get tidied up later,
+        #        probably by just going "No! The folder preview must be a png..." etc.
+        for ext in ['.jpg', '.png', '.jpeg', '.gif']:
+            for filename in ['folder' + ext, '.folder' + ext, 'folder' + ext.upper(), '.folder' + ext.upper()]:
+                try: self.preview = Image(os.path.join(self._fullpath, filename))  # noqa: E701
+                except FileNotFoundError: continue  # noqa: E701
+                else: break  # noqa: E701
 
     def __iter__(self):
         self._index = 0
@@ -156,7 +187,7 @@ class Folder(vfs_Object):
                     return video
                 else:
                     # There's both an image and a video
-                    video.poster = image
+                    video.preview = image
                     return video
 
             raise Exception("Reaching this point should be impossible")
@@ -185,7 +216,8 @@ class Folder(vfs_Object):
         if os.path.isdir(fullpath):
             return Folder(fullpath)
         else:
-            return self._get_file(fullpath)
+            sortkey = _get_sortkey(name=self.name, is_file=True)
+            return self._get_file(fullpath, sortkey=sortkey)
 
 
 def _get_sortkey(entry=None, name='', is_file=None):

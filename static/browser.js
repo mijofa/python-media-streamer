@@ -1,4 +1,4 @@
-function get_dir_listing() {
+function update_dir_listing() {
     // FIXME: Render the HTML as a Flask template and do all this in HTML, not JS
     var req = new XMLHttpRequest();
     req.open("GET", "ls.json", true);
@@ -10,23 +10,34 @@ function get_dir_listing() {
             item.innerText = "Directory is empty";
             list.appendChild(item);
         } else {
+            current_heading = null;
             for (var entry_index in entries) {
                 var entry = entries[entry_index];
-                if (entry.hidden) {
-                    // Keep hidden files hidden.
-                    continue
-                }
                 if (entry.is_file & ! entry.mimetype.startsWith('video/')) {
                     // Don't show any files that are not videos
                     continue
+                }
+
+                first_letter = entry.sortkey[1][0].toUpperCase()
+                if (current_heading != first_letter) {
+                    lh = document.createElement('lh');
+                    lh.innerText = first_letter;
+                    list.appendChild(lh);
+                    current_heading = first_letter
                 }
 
                 list_item = document.createElement('li');
                 link = document.createElement('a');
                 list_item.appendChild(link);
 
-                link.innerText = entry.name;
-    
+                if (entry.preview) {
+                    img = document.createElement('img');
+                    img.src = "data:image/png;base64," + entry.preview;
+                    img.title = entry.name;
+                    link.appendChild(img);
+                } else {
+                    link.innerText = entry.name;
+                }
                 if (entry.is_file) {
                     link.href = '/watch/' + entry.path;
                     list_item.classList.add('file-entry');
@@ -46,4 +57,4 @@ function get_dir_listing() {
 
 }
 
-window.addEventListener("load", get_dir_listing);
+window.addEventListener("load", update_dir_listing);
