@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import errno
 import os
+import sys
 
 import magic
 
@@ -75,6 +76,7 @@ class vfs_Object():
 class File(vfs_Object):
     """Generic file class"""
     _isfile = True
+    poster = None
 
     def __init__(self, path, mimetype='', **kwargs):
         super().__init__(path, **kwargs)
@@ -86,7 +88,9 @@ class Video(File):
 
 
 class Image(File):
-    pass
+    def __init__(self, *args, **kwargs):
+        self.poster = self
+        super().__init__(*args, **kwargs)
 
 
 class Folder(vfs_Object):
@@ -95,24 +99,65 @@ class Folder(vfs_Object):
 
     def __iter__(self):
         self._index = 0
-        # If it's neither a file or a directory, it's probably a broken symlink, just ignore it
-        # Also ignore hidden files, they don't matter for the iterable
-        # FIXME: Add a "show_hidden" flag somehow?
-        self._iterable = [(_get_sortkey(e), e) for e in os.scandir(self._fullpath)
-                          if not e.name.startswith('.') and (e.is_file() or e.is_dir())]
-        self._iterable.sort()
+        self._objects = {}
+        # Since dicts are not sorted, I keep a separately sorted list of the dict keys
+        # FIXME: This name is misleading as it's not actually sorted until after the loop
+        self._sorted_list = []
+        for entry in os.scandir(self._fullpath):
+            # If it's not hidden, and it is a file or directory (therefore not a broken symlink)
+            # FIXME: Add a "show_hidden" flag somehow?
+            if not entry.name.startswith('.') and (entry.is_file() or entry.is_dir()):
+                sortkey = _get_sortkey(entry)
+                if sortkey not in self._objects:
+                    self._sorted_list.append(sortkey)
+                    self._objects[sortkey] = []
+                self._objects[sortkey].append(entry)
+        self._sorted_list.sort()
         return self
 
     def __next__(self):
-        if self._index >= len(self._iterable):
+        if self._index >= len(self._objects):
             raise StopIteration
         else:
-            sortkey, entry = self._iterable[self._index]
+            sortkey = self._sorted_list[self._index]
             self._index += 1
-            if entry.is_file():
-                return self._get_file(entry.path, sortkey=sortkey)
-            elif entry.is_dir():
-                return Folder(entry.path, sortkey=sortkey)
+            if len(self._objects[sortkey]) == 1:
+                entry, = self._objects[sortkey]
+                if entry.is_dir():
+                    return Folder(entry.path, sortkey=sortkey)
+                else:
+                    print("WARNING: No metadata for", entry.path, file=sys.stderr)
+                    return self._get_file(entry.path, sortkey=sortkey)
+            else:
+                # Multiple associated files to deal with.
+                video = None
+                image = None
+                for entry in self._objects[sortkey]:
+                    assert not entry.is_dir(), "Directories shouldn't have extensions"
+                    f = self._get_file(entry.path, sortkey=sortkey)
+                    if isinstance(f, Video):
+                        video = f
+                    elif isinstance(f, Image):
+                        image = f
+#                    elif isinstance(f, Subtitles):
+#                        subtitles = f
+                    else:
+                        # Unrecognised file, just going to ignore this one.
+                        pass
+                if video is None and image is None:
+                    # No associated video or image file found, so skip this entry and move on.
+                    return self.__next__()
+                elif video is None:
+                    # There's an image but no associated video
+                    return image
+                elif image is None:
+                    # There's a videobut no associated image
+                    # No other part of the code really does anything with this yet, but I'll return it as is anyway
+                    return video
+                else:
+                    # There's both an image and a video
+                    video.poster = image
+                    return video
 
             raise Exception("Reaching this point should be impossible")
 
@@ -166,10 +211,8 @@ def _get_sortkey(entry=None, name='', is_file=None):
     #        I think this is solvable in the locale, but I don't know how
     # This *might* help with that, needs testing
     if is_file:
-        name, ext = name.rsplit(os.path.extsep, 1)
-    else:
-        ext = ''
+        name = name.rsplit(os.path.extsep, 1)[0]
 
     # False sorts before True, so directories will come first
-    sortkey = is_file, name, ext
+    sortkey = is_file, name
     return sortkey
