@@ -4,6 +4,9 @@ import errno
 import io
 import os
 import sys
+import urllib.parse
+
+import configparser  # FIXME: Only used for backcompat with UPMC
 
 import PIL.Image
 import magic
@@ -40,6 +43,7 @@ class vfs_Object():
     _uri = None
     _sortkey = None
     _mimetype = ''
+    _islocal = True
     preview = None
 
     def __repr__(self):
@@ -58,13 +62,14 @@ class vfs_Object():
             self._relpath = path
             self._fullpath = os.path.join(os.path.abspath(_CONFIG_MEDIA_PATH), path)
 
-        if not os.path.exists(self._fullpath):
-            raise FileNotFoundError(errno.ENOENT, "No such file or directory", path)
-        if self._isfile is not None:
-            if self._isfile and not os.path.isfile(self._fullpath):
-                raise FileNotFoundError(errno.ENOENT, "Not a file", path)
-            elif not self._isfile and not os.path.isdir(self._fullpath):
-                raise FileNotFoundError(errno.ENOENT, "Not a directory", path)
+        if self._islocal:
+            if not os.path.exists(self._fullpath):
+                raise FileNotFoundError(errno.ENOENT, "No such file or directory", path)
+            if self._isfile is not None:
+                if self._isfile and not os.path.isfile(self._fullpath):
+                    raise FileNotFoundError(errno.ENOENT, "Not a file", path)
+                elif not self._isfile and not os.path.isdir(self._fullpath):
+                    raise FileNotFoundError(errno.ENOENT, "Not a directory", path)
 
         # Need to strip os.path.sep first to stop 'foo/bar/' from returning '', because it ends with a '/'
         self._name = os.path.basename(self._relpath.strip(os.path.sep))
@@ -112,26 +117,74 @@ class File(vfs_Object):
         self._mimetype = mimetype
 
 
+class _Metadata(File):
+    # This class is only for backcompat with UPMC's stupid .info files. that's why it's read-only.
+    # At the very least I should be using json, if not a sqlite database/etc
+    def __init__(self, path, mimetype='text/plain', **kwargs):
+        super().__init__(path, mimetype, **kwargs)
+        self.meta = configparser.ConfigParser()
+        self.meta.read(path)
+
+    def __getitem__(self, item):
+        if self.meta.has_section('local') and self.meta.has_option('local', item):
+            return self.meta.get('local', item).rstrip(' | ')
+        elif self.meta.has_section('IMDB') and self.meta.has_option('IMDB', item):
+            return self.meta.get('IMDB', item).rstrip(' | ')
+        else:
+            raise KeyError(item)
+
+    def __contains__(self, item):
+        if self.meta.has_section('local') and self.meta.has_option('local', item):
+            return True
+        elif self.meta.has_section('IMDB') and self.meta.has_option('IMDB', item):
+            return True
+        else:
+            return False
+
+
 class Video(File):
     pass
 
 
 class Image(File):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, path, *args, **kwargs):
+        self._uri = urllib.parse.urlparse(path)
+        if self._uri.netloc:
+            self._islocal = False
+
+        super().__init__(path, *args, **kwargs)
         self.preview = self
-        super().__init__(*args, **kwargs)
 
     def get_thumbnail(self, size=(280, 180)):  # FIXME: Default size inherited from UPMC, get a better size
-        assert isinstance(size, tuple)
-        assert len(size) == 2
-        image_buffer = io.BytesIO()
-        im = PIL.Image.open(self._fullpath)
-        im.thumbnail(size=size)
-        im.save(image_buffer, format='png')  # FIXME: Is PNG reasonable? Not using JPEG because I want alpha channel support
-        image_buffer.seek(0)
-        b64_data = base64.b64encode(image_buffer.read())
-        image_buffer.close()
-        return b64_data.decode('ascii')
+        if self._islocal:
+            assert isinstance(size, tuple)
+            assert len(size) == 2
+            image_buffer = io.BytesIO()
+            im = PIL.Image.open(self._fullpath)
+            im.thumbnail(size=size)
+            im.save(image_buffer, format='png')  # FIXME: Is PNG reasonable? Not using JPEG because I want alpha channel support
+            image_buffer.seek(0)
+            b64_data = base64.b64encode(image_buffer.read())
+            image_buffer.close()
+            return "data:image/png;base64," + b64_data.decode('ascii')
+        else:
+            if self._uri.netloc.endswith('-amazon.com') or self._uri.netloc.endswith('-imdb.com'):
+                # IMDB's CDNs, so it's safe to assume IMDB's URI format for size conversions
+                # NOTE: I don't actually understand this format *AT ALL* I just barely reverse-engineered it enough to get the required result.
+                if self._uri.path.endswith('_.jpg'):
+                    # This is not the *full-size* uri! Oh well, lets rip it apart and fix that.
+                    path = self._uri.path.rsplit('.', 3)[0]
+                    path += '.jpg'  # FIXME: Don't assume JPEG
+                    # FIXME: _replace is an internal function, don't use it!
+                    self._uri = self._uri._replace(path=path)
+
+                base_path, ext = self._uri.path.rsplit('.', 1)
+                x, y = size
+
+                return self._uri._replace(params=self.sortkey[1], path="{base_path}._V1._SX{x}_SY{y}_.{ext}".format(base_path=base_path, ext=ext, x=x, y=y)).geturl()
+            else:
+                # Not IMDB, fuck it just return the full-size URL and hope the CSS takes care of it.
+                return urllib.parse.urlunparse(self._uri)
 
 
 class Folder(vfs_Object):
@@ -184,6 +237,7 @@ class Folder(vfs_Object):
                 # Multiple associated files to deal with.
                 video = None
                 image = None
+                metadata = None
                 for entry in self._objects[sortkey]:
                     assert not entry.is_dir(), "Directories shouldn't have extensions"
                     f = self._get_file(entry.path, sortkey=sortkey)
@@ -193,9 +247,15 @@ class Folder(vfs_Object):
                         image = f
 #                    elif isinstance(f, Subtitles):
 #                        subtitles = f
+                    elif isinstance(f, _Metadata):
+                        metadata = f
                     else:
                         # Unrecognised file, just going to ignore this one.
                         pass
+                if metadata is not None and 'full-size cover url' in metadata:
+                    # FIXME: Don't assume JPEG!
+                    image = Image(metadata['full-size cover url'], mimetype='image/jpeg', sortkey=sortkey)
+
                 if video is None and image is None:
                     # No associated video or image file found, so skip this entry and move on.
                     return self.__next__()
@@ -203,7 +263,7 @@ class Folder(vfs_Object):
                     # There's an image but no associated video
                     return image
                 elif image is None:
-                    # There's a videobut no associated image
+                    # There's a video but no associated image
                     # No other part of the code really does anything with this yet, but I'll return it as is anyway
                     return video
                 else:
@@ -222,6 +282,8 @@ class Folder(vfs_Object):
             return Video(path, mimetype=mimetype, sortkey=sortkey)
         elif type_cat == 'image':
             return Image(path, mimetype=mimetype, sortkey=sortkey)
+        elif type_cat == 'text' and path.endswith('.info'):
+            return _Metadata(path, sortkey=sortkey)
         else:
             return File(path, mimetype=mimetype, sortkey=sortkey)
 

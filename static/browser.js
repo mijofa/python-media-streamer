@@ -32,7 +32,7 @@ function update_dir_listing() {
 
                 if (entry.preview) {
                     img = document.createElement('img');
-                    img.src = "data:image/png;base64," + entry.preview;
+                    img.src = entry.preview;
                     img.title = entry.name;
                     link.appendChild(img);
                 } else {
