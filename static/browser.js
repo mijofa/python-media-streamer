@@ -4,13 +4,14 @@ function update_dir_listing() {
     req.open("GET", "ls.json", true);
     req.onload = function(e) {
         entries = JSON.parse(req.responseText);
-        list = document.getElementById("directory-listing");
+        full_list = document.getElementById("directory-listing");
         if (Object.keys(entries).length == 0) {
             item = document.createElement('li');
             item.innerText = "Directory is empty";
-            list.appendChild(item);
+            full_list.appendChild(item);
         } else {
             current_heading = null;
+            current_list = null;
             for (var entry_index in entries) {
                 var entry = entries[entry_index];
                 if (entry.is_file & ! entry.mimetype.startsWith('video/')) {
@@ -20,35 +21,42 @@ function update_dir_listing() {
 
                 first_letter = entry.sortkey[1][0].toUpperCase()
                 if (current_heading != first_letter) {
-                    lh = document.createElement('lh');
-                    lh.innerText = first_letter;
-                    list.appendChild(lh);
-                    current_heading = first_letter
+                    current_list = document.createElement('ol');
+                    current_list.classList.add('single-letter');
+                    current_list.title = first_letter;
+                    full_list.appendChild(current_list);
+
+//                    lh = document.createElement('lh');
+//                    lh.innerText = first_letter;
+//                    current_list.appendChild(lh);
+                    current_heading = first_letter;
                 }
 
                 list_item = document.createElement('li');
+                list_item.title = entry.name;
                 link = document.createElement('a');
+                link.title = entry.name;
                 list_item.appendChild(link);
 
                 if (entry.preview) {
                     img = document.createElement('img');
                     img.src = entry.preview;
-                    img.title = entry.name;
                     link.appendChild(img);
                 } else {
                     link.innerText = entry.name;
                 }
+                list_item.classList.add('entry');
                 if (entry.is_file) {
                     link.href = '/watch/' + entry.path;
-                    list_item.classList.add('file-entry');
+                    list_item.classList.add('file');
                 } else {
                     // entry.path is relative to the media root directory,
                     // I think entry.name will always be just the filename but I'm not certain
                     link.href = entry.name;
-                    list_item.classList.add('directory-entry');
+                    list_item.classList.add('directory');
                 }
 
-                list.appendChild(list_item);
+                current_list.appendChild(list_item);
             }
         }
         document.getElementById('loading').remove();

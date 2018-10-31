@@ -1,21 +1,55 @@
-lh {
-    font-size: larger;
-    /* I want to counter the ol padding, but only for the headings, so I can't just remove the padding entirely */
-    position: relative; left: -40px;
+ol {
+    list-style-type: none;
+    padding: 0;
 }
 
-.flex-container {
+ol.directory-listing {
     display: flex;
     flex-direction: column;
+}
+
+ol.single-letter {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+ol.single-letter::before {
+    content: attr(title);
+    font-size: x-large;
 }
 
 .back {
     color: var(--accent-colour);
 }
 
-.directory-entry {
+.entry {
+    position: relative;  /* Needed for the ::after effects to work */
+
+    padding: 1ex;
+
+    vertical-align: middle;
+    text-align: center;
+}
+
+.entry.directory {
     font-weight: bold;
 }
-.directory-entry a::after {
+.entry.directory a::after {
     content: "/";
+}
+
+.entry:hover img {
+    opacity: 0.5; 
+}
+.entry a::after {
+    content: attr(title);
+    position: absolute;
+
+    background-color: var(--accent-colour);
+    padding: 1ex; border-radius: 1ex;
+    opacity: 0.9;
+
+    top: 50%; left: 50%;
+    text-align: center;
+    transform: translate(-50%, -50%);
 }

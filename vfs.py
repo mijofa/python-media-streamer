@@ -73,6 +73,8 @@ class vfs_Object():
 
         # Need to strip os.path.sep first to stop 'foo/bar/' from returning '', because it ends with a '/'
         self._name = os.path.basename(self._relpath.strip(os.path.sep))
+        if self._isfile:
+            self._name = self._name.rsplit('.', 1)[0]
 
         self._sortkey = sortkey
 
