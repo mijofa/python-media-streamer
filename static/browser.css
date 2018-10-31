@@ -14,7 +14,7 @@ ol.single-letter {
     flex-wrap: wrap;
 }
 ol.single-letter::before {
-    content: attr(title);
+    content: attr(data-letter);
     font-size: x-large;
 }
 
@@ -23,12 +23,14 @@ ol.single-letter::before {
 }
 
 .entry {
-    position: relative;  /* Needed for the ::after effects to work */
+/*    position: relative;  /* Needed for the ::after effects to work */
 
     padding: 1ex;
 
     vertical-align: middle;
     text-align: center;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .entry.directory {
@@ -38,11 +40,16 @@ ol.single-letter::before {
     content: "/";
 }
 
+.entry a {
+    position: relative;
+    display: block;
+}
+
 .entry:hover img {
     opacity: 0.5; 
 }
-.entry a::after {
-    content: attr(title);
+.entry:hover a::after {
+    content: attr(data-filename);
     position: absolute;
 
     background-color: var(--accent-colour);

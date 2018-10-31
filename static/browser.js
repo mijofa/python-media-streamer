@@ -23,7 +23,7 @@ function update_dir_listing() {
                 if (current_heading != first_letter) {
                     current_list = document.createElement('ol');
                     current_list.classList.add('single-letter');
-                    current_list.title = first_letter;
+                    current_list.setAttribute('data-letter', first_letter);
                     full_list.appendChild(current_list);
 
 //                    lh = document.createElement('lh');
@@ -33,9 +33,9 @@ function update_dir_listing() {
                 }
 
                 list_item = document.createElement('li');
-                list_item.title = entry.name;
+                list_item.setAttribute('filename', entry.name);
                 link = document.createElement('a');
-                link.title = entry.name;
+                link.setAttribute('data-filename', entry.name);
                 list_item.appendChild(link);
 
                 if (entry.preview) {
