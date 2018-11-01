@@ -5,7 +5,6 @@ import os
 import sys
 
 import flask
-import magic
 
 import ffmpeg
 
@@ -20,26 +19,6 @@ TMP_DIR = os.path.join(os.environ.get('XDG_RUNTIME_DIR', os.environ.get('TMPDIR'
 
 media_path = sys.argv[1] if len(sys.argv) > 1 else os.path.curdir
 media_path += '/' if not media_path.endswith('/') else ''
-
-
-magic_db = magic.open(sum((
-    magic.SYMLINK,  # Follow symlinks
-    magic.MIME_TYPE,  # Just report the mimetype, don't make it human-readable.
-    magic.PRESERVE_ATIME,  # Preserve the file access time, since I'm only using this when listing the directories
-    # Literally just [i for i in dir(magic) if i.startswith('NO_CHECK')]
-    # I expect that by disabling all these checks it should be quicker & more efficient.
-    magic.NO_CHECK_APPTYPE,
-    magic.NO_CHECK_BUILTIN,
-    magic.NO_CHECK_CDF,
-    magic.NO_CHECK_COMPRESS,
-    magic.NO_CHECK_ELF,
-    magic.NO_CHECK_ENCODING,
-    magic.NO_CHECK_SOFT,
-    magic.NO_CHECK_TAR,
-    ## I need to actually check for text files
-    # magic.NO_CHECK_TEXT
-    magic.NO_CHECK_TOKENS,
-)))
 
 
 def get_mediauri(filename):
@@ -171,6 +150,4 @@ def get_ip():
 if __name__ == "__main__":
     if not os.path.isdir(TMP_DIR):
         os.mkdir(TMP_DIR)
-    magic_db.load()  # FIXME: Use a smaller (more specifically relevant) database file rather than the default
     app.run(debug=True, host='0.0.0.0', threaded=True)
-    magic_db.close()  # FIXME: Will this ever actually run?
