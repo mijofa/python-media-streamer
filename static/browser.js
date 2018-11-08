@@ -20,6 +20,10 @@ function update_dir_listing() {
                 }
 
                 first_letter = entry.sortkey[1][0].toUpperCase()
+                if (!isNaN(parseFloat(first_letter)) && isFinite(first_letter)) {  // Basically, is it a digit?
+                    first_letter = '#'  // FIXME: Will collide with actual '#'
+                }
+                // FIXME: What about punctuation and other non-alphanumeric characters?
                 if (current_heading != first_letter) {
                     current_list = document.createElement('ol');
                     current_list.classList.add('single-letter');
@@ -33,7 +37,6 @@ function update_dir_listing() {
                 }
 
                 list_item = document.createElement('li');
-                list_item.setAttribute('filename', entry.name);
                 link = document.createElement('a');
                 link.setAttribute('data-filename', entry.name);
                 list_item.appendChild(link);
@@ -41,6 +44,7 @@ function update_dir_listing() {
                 if (entry.preview) {
                     img = document.createElement('img');
                     img.src = entry.preview;
+                    img.alt = entry.name;
                     link.appendChild(img);
                 } else {
                     link.innerText = entry.name;

@@ -36,9 +36,6 @@ ol.single-letter::before {
 .entry.directory {
     font-weight: bold;
 }
-.entry.directory a::after {
-    content: "/";
-}
 
 .entry a {
     position: relative;
@@ -46,7 +43,7 @@ ol.single-letter::before {
 }
 
 .entry:hover img {
-    opacity: 0.5; 
+    opacity: 0.5;
 }
 .entry:hover a::after {
     content: attr(data-filename);
