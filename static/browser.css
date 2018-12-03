@@ -57,3 +57,8 @@ ol.single-letter::before {
     text-align: center;
     transform: translate(-50%, -50%);
 }
+.entry:hover a:visited::after {
+    /* FIXME: This is stupid & ugly (but functional) fix it!*/
+    background-color: blue;
+    color: var(--accent-colour);
+}
