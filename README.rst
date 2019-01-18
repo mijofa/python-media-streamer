@@ -19,3 +19,5 @@ So the goal with this is to start with having a simple web interface that provid
 TODO
 ====
 * Implement WakeLock as per spec at https://www.w3.org/TR/wake-lock/
+
+* https://pypi.org/project/memoized-property/
