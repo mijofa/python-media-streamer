@@ -28,6 +28,7 @@ function update_dir_listing() {
                     current_list = document.createElement('ol');
                     current_list.classList.add('single-letter');
                     current_list.setAttribute('data-letter', first_letter);
+                    current_list.setAttribute('name', first_letter);
                     full_list.appendChild(current_list);
 
 //                    lh = document.createElement('lh');
