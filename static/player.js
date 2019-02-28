@@ -494,6 +494,7 @@ var init_cast;
 var set_media;
 window.onload = function() {
     video_player = document.getElementById("video-player");
+    video_player.volume = 0.5;  // Done ASAP to avoid a burst of loud audio
 
     setup_controls();
     
