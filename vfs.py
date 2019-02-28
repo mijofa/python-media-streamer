@@ -55,12 +55,9 @@ class vfs_Object():
         if self.__class__.__name__ == 'vfs_Object':
             raise NotImplementedError("vfs_Object is not supposed to be used directly")
 
-        if path.startswith(_CONFIG_MEDIA_PATH):
-            self._relpath = path[len(_CONFIG_MEDIA_PATH):].lstrip(os.path.sep)
-            self._fullpath = path
-        else:
-            self._relpath = path
-            self._fullpath = os.path.join(os.path.abspath(_CONFIG_MEDIA_PATH), path)
+        self._fullpath = _get_last_rel_link_in_media_dir(
+            os.path.join(os.path.abspath(_CONFIG_MEDIA_PATH), path))
+        self._relpath = os.path.relpath(self._fullpath, start=_CONFIG_MEDIA_PATH)
 
         if self._islocal:
             if not os.path.exists(self._fullpath):
@@ -72,11 +69,15 @@ class vfs_Object():
                     raise FileNotFoundError(errno.ENOENT, "Not a directory", path)
 
         # Need to strip os.path.sep first to stop 'foo/bar/' from returning '', because it ends with a '/'
-        self._name = os.path.basename(self._relpath.strip(os.path.sep))
+        # NOTE: Name must be set from the original path (or metadata) not the path after following symlinks around
+        self._name = os.path.basename(path.strip(os.path.sep))
         if self._isfile:
             self._name = self._name.rsplit('.', 1)[0]
 
-        self._sortkey = sortkey
+        if sortkey:
+            self._sortkey = sortkey
+        else:
+            self._sortkey = _get_sortkey(name=self.name, is_file=self._isfile)
 
     ## Read only properties ##
 
@@ -105,8 +106,6 @@ class vfs_Object():
 
     @property
     def sortkey(self):
-        if not self._sortkey:
-            self._sortkey = _get_sortkey(name=self.name, is_file=self._isfile)
         return self._sortkey
 
 
@@ -333,3 +332,28 @@ def _get_sortkey(entry=None, name='', is_file=None):
     # False sorts before True, so directories will come first
     sortkey = is_file, name
     return sortkey
+
+
+def _get_last_rel_link_in_media_dir(path):
+    # PROBLEM: Latest/Foo-S01E01 is a diferent URL from TV/Foo/S01E01 and therefore history isn't accurate
+    # SOLUTION 1: os.path.realpath everything before making URLS
+    # PROBLEM 2: Everything eventually links to the torrents directory, which we don't serve out
+    # SOLUTION 2: Reimplement realpath ourselves with a constraint that it not leave the media directory
+    while os.path.islink(path):
+        link_path = os.readlink(path)
+
+        if not link_path.startswith(os.path.sep):
+            # Path is relative
+            link_path = os.path.normpath(os.path.join(
+                path.rsplit(os.path.sep, 1)[0],
+                link_path))
+#       else:  # Path is absolute, don't need to do anything
+
+        if os.path.commonpath([_CONFIG_MEDIA_PATH, link_path]) == _CONFIG_MEDIA_PATH:
+            path = link_path
+            # Loop back through again
+        else:
+            # We found a link to outside of the media_dir, stop and use the last iteration
+            break
+
+    return path
