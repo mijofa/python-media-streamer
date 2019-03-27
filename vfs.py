@@ -14,28 +14,27 @@ import magic
 # FIXME: Put this in a config file somehow
 _CONFIG_MEDIA_PATH = '/srv/media/Video'
 
-# magic.open() is not threadsafe. :'(
-## FIXME: Use a smaller (presumably therefore more efficient) database file.
-##        Perhaps with just video/* & image/* filetypes in it?
-#magic_db = magic.open(sum((
-#    magic.SYMLINK,  # Follow symlinks
-#    magic.MIME_TYPE,  # Just report the mimetype, don't make it human-readable.
-#    magic.PRESERVE_ATIME,  # Preserve the file access time, since I'm only using this when listing the directories
-#    # Literally just [i for i in dir(magic) if i.startswith('NO_CHECK')]
-#    # I expect that by disabling all these checks it should be quicker & more efficient.
-#    magic.NO_CHECK_APPTYPE,
-#    magic.NO_CHECK_BUILTIN,
-#    magic.NO_CHECK_CDF,
-#    magic.NO_CHECK_COMPRESS,
-#    magic.NO_CHECK_ELF,
-#    magic.NO_CHECK_ENCODING,
-#    magic.NO_CHECK_SOFT,
-#    magic.NO_CHECK_TAR,
-#    # I need to actually check for text files for the .info files
-#    # magic.NO_CHECK_TEXT
-#    magic.NO_CHECK_TOKENS,
-#)))
-#magic_db.load()  # FIXME: Does this close cleanly?
+# FIXME: Use a smaller (presumably therefore more efficient) database file.
+#        Perhaps with just video/* & image/* filetypes in it?
+magic_db = magic.open(sum((
+    magic.SYMLINK,  # Follow symlinks
+    magic.MIME_TYPE,  # Just report the mimetype, don't make it human-readable.
+    magic.PRESERVE_ATIME,  # Preserve the file access time, since I'm only using this when listing the directories
+    # Literally just [i for i in dir(magic) if i.startswith('NO_CHECK')]
+    # I expect that by disabling all these checks it should be quicker & more efficient.
+    magic.NO_CHECK_APPTYPE,
+    magic.NO_CHECK_BUILTIN,
+    magic.NO_CHECK_CDF,
+    magic.NO_CHECK_COMPRESS,
+    magic.NO_CHECK_ELF,
+    magic.NO_CHECK_ENCODING,
+    magic.NO_CHECK_SOFT,
+    magic.NO_CHECK_TAR,
+    # I need to actually check for text files for the .info files
+    # magic.NO_CHECK_TEXT
+    magic.NO_CHECK_TOKENS,
+)))
+magic_db.load()  # FIXME: Does this close cleanly?
 
 
 class vfs_Object():
@@ -102,7 +101,7 @@ class vfs_Object():
     @property
     def mimetype(self):
         if not self._mimetype:
-            self._mimetype = magic.from_file(self._fullpath)
+            self._mimetype = magic_db.file(self._fullpath)
         return self._mimetype
 
     @property
@@ -278,7 +277,7 @@ class Folder(vfs_Object):
     def _get_file(self, path, sortkey):
         # FIXME: Make the magic DB smaller & more efficient, this is the slowest part of all
         # FIXME: Make the magic DB recognise SRT files.
-        mimetype = magic.from_file(path)
+        mimetype = magic_db.file(path)
         type_cat = mimetype.partition('/')[0]
         if type_cat == 'video':
             return Video(path, mimetype=mimetype, sortkey=sortkey)
