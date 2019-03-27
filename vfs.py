@@ -183,7 +183,10 @@ class Image(File):
                 base_path, ext = self._uri.path.rsplit('.', 1)
                 x, y = size
 
-                return self._uri._replace(params=self.sortkey[1], path="{base_path}._V1._SX{x}_SY{y}_.{ext}".format(base_path=base_path, ext=ext, x=x, y=y)).geturl()
+                return self._uri._replace(params=self.sortkey[1],
+                                          path="{base_path}._V1._SX{x}_SY{y}_.{ext}".format(
+                                              base_path=base_path, ext=ext, x=x, y=y)
+                                          ).geturl()
             else:
                 # Not IMDB, fuck it just return the full-size URL and hope the CSS takes care of it.
                 return urllib.parse.urlunparse(self._uri)
