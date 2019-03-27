@@ -14,6 +14,7 @@ import magic
 # FIXME: Put this in a config file somehow
 _CONFIG_MEDIA_PATH = '/srv/media/Video'
 
+## FIXME: This magic library is not threadsafe, find an alternative.
 # FIXME: Use a smaller (presumably therefore more efficient) database file.
 #        Perhaps with just video/* & image/* filetypes in it?
 magic_db = magic.open(sum((
