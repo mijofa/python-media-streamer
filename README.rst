@@ -1,3 +1,12 @@
+=========
+ABANDONED
+=========
+I never did get on-demand fragments working properly.
+Once Jellyfin came about I started using that and it's worked well for me.
+Jellyfin is a fork of Emby from the point when they started violating GPL/etc, so it resolves most of my concerns there too.
+
+=========
+
 Python Media Streamer
 =====================
 First up, this name is bad but I'm not very creative.
